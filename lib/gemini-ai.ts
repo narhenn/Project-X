@@ -144,6 +144,71 @@ Return only the JSON array.`;
     throw e;
   }
 }
+
+const LEARNER_TYPE_IDS = ['visual', 'kinesthetic', 'auditory', 'stress', 'ease', 'scribble', 'trust', 'teach', 'copy'];
+
+/** Learner DNA: generate personality traits + learner type(s) from quiz-derived profile (Gemini). */
+export async function generatePersonaFromProfile(profile: {
+  learningStyle: string;
+  studyHoursPerDay: number;
+  studyDaysPerWeek: number;
+  examPrepWeek: number;
+  preferredQuestionFormat: string;
+  cognitiveScore: number;
+  readinessScore?: number;
+  rawAnswers?: Record<string, string>;
+}): Promise<{ personalityTraits: string[]; learnerTypes: string[] }> {
+  log.info('Generating persona from profile', { learningStyle: profile.learningStyle, readinessScore: profile.readinessScore });
+  const summary = [
+    `Learning readiness score (0–100, primary signal): ${profile.readinessScore ?? 'not provided'}`,
+    `Learning style: ${profile.learningStyle}`,
+    `Study hours per day: ${profile.studyHoursPerDay}`,
+    `Study days per week: ${profile.studyDaysPerWeek}`,
+    `Starts exam prep: ${profile.examPrepWeek} weeks before`,
+    `Preferred question format: ${profile.preferredQuestionFormat}`,
+    `Reasoning/cognitive score (0–100, light signal only): ${profile.cognitiveScore}`,
+  ].join('. ');
+  const prompt = `You are an expert educational psychologist. Interpret this learner profile and return a JSON object with two keys.
+
+IMPORTANT: The primary signals are study consistency, time commitment, and planning horizon. The cognitive/reasoning score is a LIGHT signal only—do NOT infer intelligence or ability from it alone. A "good" profile means strong learning readiness (consistent, committed, plans ahead), not a high cognitive number.
+
+1) "personalityTraits": array of 3–5 short hyphenated labels (e.g. consistent-learner, deadline-driven, self-directed). Be specific to their habits and readiness.
+
+2) "learnerTypes": array of 1–3 IDs from this EXACT list: visual, kinesthetic, auditory, stress, ease, scribble, trust, teach, copy. Use these mappings so results vary by profile (do not default only to "ease"):
+- short-term / cram / last-minute → stress
+- long-term / calm / self-paced / gradual → ease
+- preferred format short-answer or essay → scribble (they learn by writing)
+- preferred format MCQ / likes structure → visual or trust (learn from materials or authority)
+- study hours high + many days → kinesthetic (learn by doing) or teach (learn by teaching others)
+- auditory = prefers lectures/discussions (if profile suggests listening)
+
+Return ONLY valid JSON: {"personalityTraits":["...","..."],"learnerTypes":["id1","id2"]}. No markdown, no other text.
+
+Learner profile:
+${summary}`;
+  const raw = await callGemini(prompt, 700);
+  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  try {
+    const obj = JSON.parse(cleaned);
+    const personalityTraits = Array.isArray(obj.personalityTraits)
+      ? obj.personalityTraits.filter((t: unknown): t is string => typeof t === 'string').slice(0, 6)
+      : [];
+    const learnerTypes = Array.isArray(obj.learnerTypes)
+      ? obj.learnerTypes.filter((id: unknown) => typeof id === 'string' && LEARNER_TYPE_IDS.includes(id))
+      : [];
+    return { personalityTraits, learnerTypes };
+  } catch (e) {
+    log.error('Failed to parse persona response', { preview: cleaned.substring(0, 200) });
+    return { personalityTraits: [], learnerTypes: [] };
+  }
+}
+
+/** @deprecated Use generatePersonaFromProfile. Kept for backward compatibility. */
+export async function generatePersonalityTraits(profile: Parameters<typeof generatePersonaFromProfile>[0]): Promise<string[]> {
+  const { personalityTraits } = await generatePersonaFromProfile(profile);
+  return personalityTraits;
+}
+
 export async function generateFlashcards(topic, missedQuestions, learningStyle) {
   log.info('Generating flashcards', { topic, missedCount: missedQuestions.length });
   const prompt = `You are an expert tutor. A student studying "${topic}" missed: ${missedQuestions.join(', ')}. Style: ${learningStyle}. Generate 5 flashcards. Return ONLY valid JSON array, no backticks: [{"front":"...","back":"...","difficulty":"easy|medium|hard"}]`;
