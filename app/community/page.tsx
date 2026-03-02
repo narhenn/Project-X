@@ -1,271 +1,329 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
-import { AppSidebar } from '@/components/AppSidebar';
-
-type StudyPost = {
-  id: string;
-  topic: string;
-  place: string;
-  date: string;
-  time: string;
-  note?: string;
-  author: string;
-  authorInitial: string;
-  joined: string[]; // user ids or names who joined
-  createdAt: number;
-};
-
-const MOCK_POSTS: StudyPost[] = [
-  {
-    id: '1',
-    topic: 'Format strings & printf (Computer Security)',
-    place: 'Library Level 4, Study Booth B',
-    date: '2025-03-05',
-    time: '14:00',
-    note: 'Going through lecture 3 and practice problems.',
-    author: 'Wei Ming',
-    authorInitial: 'W',
-    joined: ['Sarah L.'],
-    createdAt: Date.now() - 3600000,
-  },
-  {
-    id: '2',
-    topic: 'Introduction to Databases – SQL queries',
-    place: 'North Spine NS4-02-12',
-    date: '2025-03-06',
-    time: '10:00',
-    author: 'Priya K.',
-    authorInitial: 'P',
-    joined: [],
-    createdAt: Date.now() - 7200000,
-  },
-  {
-    id: '3',
-    topic: 'Software Security – Buffer overflows',
-    place: 'The Hive, Quiet Zone',
-    date: '2025-03-07',
-    time: '16:00',
-    note: 'Bring laptop for demo.',
-    author: 'James T.',
-    authorInitial: 'J',
-    joined: ['Alex', 'Nurul'],
-    createdAt: Date.now() - 86400000,
-  },
+const mockPosts = [
+  { id: 1, title: 'How do nested if-else statements work?', body: 'I keep getting confused with the indentation and which else belongs to which if. Can someone explain with a simple example?', author: 'Anonymous Owl', anonymous: true, module: 'SC1003', topic: 'Control Structures', upvotes: 12, downvotes: 1, replies: [
+    { id: 'r1', author: 'Arun M.', body: 'Think of it like nesting boxes. Each if opens a box, and the else closes the nearest open box. Indentation helps you see which box you are in!', upvotes: 8, isAI: false },
+    { id: 'r2', author: '🤖 AI Tutor', body: 'Great question! Nested if-else works from the inside out. The innermost if-else pair resolves first. Think of it like Russian nesting dolls — each doll (if) has its own matching lid (else). A tip: always use curly braces {} even for single-line blocks to avoid confusion.', upvotes: 5, isAI: true },
+  ], solved: true, timestamp: '2 hours ago', studyGroup: null },
+  { id: 2, title: 'Anyone want to study loops together before the quiz?', body: 'I am struggling with for vs while loops. Looking for 2-3 people to do a study session tomorrow evening around 7pm. We can meet at The Hive or do it on Zoom.', author: 'Pranati S.', anonymous: false, module: 'SC1003', topic: 'Loops', upvotes: 18, downvotes: 0, replies: [
+    { id: 'r3', author: 'Yohesh R.', body: 'Count me in! I also struggle with do-while. Zoom works for me.', upvotes: 3, isAI: false },
+    { id: 'r4', author: 'Nanda K.', body: 'I am in too. Let us do The Hive Level 3?', upvotes: 2, isAI: false },
+  ], solved: false, timestamp: '5 hours ago', studyGroup: { date: 'Tomorrow 7pm', location: 'The Hive L3 / Zoom', spots: 4, joined: 2 } },
+  { id: 3, title: 'What is the difference between break and continue?', body: 'Both seem to skip something in loops but I cannot figure out when to use which one.', author: 'Anonymous Fox', anonymous: true, module: 'SC1003', topic: 'Loops', upvotes: 9, downvotes: 0, replies: [
+    { id: 'r5', author: '🤖 AI Tutor', body: 'Break exits the entire loop immediately — like walking out of a movie theater. Continue skips just the current iteration and moves to the next one — like fast-forwarding past one scene but keeping watching. Use break when you have found what you need. Use continue when you want to skip certain items but keep processing the rest.', upvotes: 7, isAI: true },
+  ], solved: true, timestamp: '1 day ago', studyGroup: null },
+  { id: 4, title: 'Study group for Module 3: Functions', body: 'Starting Module 3 next week. Want to form a weekly study group to go through it together. Planning to meet every Wednesday at 6pm.', author: 'Narhen K.', anonymous: false, module: 'SC1003', topic: 'Functions', upvotes: 15, downvotes: 0, replies: [
+    { id: 'r6', author: 'Anonymous Tiger', body: 'Yes please! Functions are tough. Wednesday works.', upvotes: 4, isAI: false },
+  ], solved: false, timestamp: '1 day ago', studyGroup: { date: 'Every Wed 6pm', location: 'TBD', spots: 6, joined: 3 } },
 ];
 
-const CURRENT_USER = 'You';
+const modules = ['All', 'SC1003', 'SC1005', 'SC2006', 'MH1812'];
+const topics = ['All', 'Control Structures', 'Loops', 'Functions', 'Arrays', 'Recursion'];
 
 export default function CommunityPage() {
-  const router = useRouter();
-  const [posts, setPosts] = useState<StudyPost[]>(MOCK_POSTS);
-  const [topic, setTopic] = useState('');
-  const [place, setPlace] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [note, setNote] = useState('');
+  const [posts, setPosts] = useState(mockPosts);
+  const [filterModule, setFilterModule] = useState('All');
+  const [filterTopic, setFilterTopic] = useState('All');
+  const [showNew, setShowNew] = useState(false);
+  const [showReplying, setShowReplying] = useState(null);
+  const [expandedPost, setExpandedPost] = useState(null);
+  const [voted, setVoted] = useState({});
 
-  const handleSignOut = () => router.push('/');
+  // New post form
+  const [newTitle, setNewTitle] = useState('');
+  const [newBody, setNewBody] = useState('');
+  const [newModule, setNewModule] = useState('SC1003');
+  const [newTopic, setNewTopic] = useState('Control Structures');
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [isStudyGroup, setIsStudyGroup] = useState(false);
+  const [groupDate, setGroupDate] = useState('');
+  const [groupLocation, setGroupLocation] = useState('');
+  const [groupSpots, setGroupSpots] = useState(4);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!topic.trim() || !place.trim() || !date.trim() || !time.trim()) return;
-    const newPost: StudyPost = {
-      id: String(Date.now()),
-      topic: topic.trim(),
-      place: place.trim(),
-      date: date.trim(),
-      time: time.trim(),
-      note: note.trim() || undefined,
-      author: CURRENT_USER,
-      authorInitial: 'A',
-      joined: [],
-      createdAt: Date.now(),
+  // Reply form
+  const [replyText, setReplyText] = useState('');
+  const [replyAnonymous, setReplyAnonymous] = useState(false);
+
+  // AI reply
+  const [aiLoading, setAiLoading] = useState(null);
+
+  const filtered = posts.filter(p => {
+    if (filterModule !== 'All' && p.module !== filterModule) return false;
+    if (filterTopic !== 'All' && p.topic !== filterTopic) return false;
+    return true;
+  });
+
+  const handleVote = (postId, type) => {
+    const key = `${postId}-${type}`;
+    if (voted[key]) return;
+    setVoted({ ...voted, [key]: true });
+    setPosts(posts.map(p => p.id === postId ? { ...p, [type === 'up' ? 'upvotes' : 'downvotes']: p[type === 'up' ? 'upvotes' : 'downvotes'] + 1 } : p));
+  };
+
+  const handleNewPost = () => {
+    const post = {
+      id: posts.length + 1,
+      title: newTitle,
+      body: newBody,
+      author: isAnonymous ? 'Anonymous ' + ['Owl', 'Fox', 'Tiger', 'Panda', 'Eagle'][Math.floor(Math.random() * 5)] : 'You',
+      anonymous: isAnonymous,
+      module: newModule,
+      topic: newTopic,
+      upvotes: 0, downvotes: 0,
+      replies: [],
+      solved: false,
+      timestamp: 'Just now',
+      studyGroup: isStudyGroup ? { date: groupDate, location: groupLocation, spots: groupSpots, joined: 1 } : null,
     };
-    setPosts((prev) => [newPost, ...prev]);
-    setTopic('');
-    setPlace('');
-    setDate('');
-    setTime('');
-    setNote('');
+    setPosts([post, ...posts]);
+    setShowNew(false);
+    setNewTitle(''); setNewBody(''); setIsAnonymous(false); setIsStudyGroup(false);
   };
 
-  const handleJoin = (postId: string) => {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, joined: p.joined.includes(CURRENT_USER) ? p.joined.filter((x) => x !== CURRENT_USER) : [...p.joined, CURRENT_USER] }
-          : p
-      )
-    );
+  const handleReply = (postId) => {
+    const reply = {
+      id: 'r' + Date.now(),
+      author: replyAnonymous ? 'Anonymous ' + ['Deer', 'Wolf', 'Bear'][Math.floor(Math.random() * 3)] : 'You',
+      body: replyText,
+      upvotes: 0,
+      isAI: false,
+    };
+    setPosts(posts.map(p => p.id === postId ? { ...p, replies: [...p.replies, reply] } : p));
+    setReplyText('');
+    setShowReplying(null);
+    setReplyAnonymous(false);
   };
 
-  const isJoined = (post: StudyPost) => post.joined.includes(CURRENT_USER);
-  const isAuthor = (post: StudyPost) => post.author === CURRENT_USER;
+  const handleAIReply = async (postId) => {
+    setAiLoading(postId);
+    const post = posts.find(p => p.id === postId);
+    try {
+      const res = await fetch('/api/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: post.module + ' ' + post.topic,
+          segmentTitle: post.title,
+          segmentContent: post.body + ' ' + post.replies.map(r => r.body).join(' '),
+          timestamp: 'community',
+        }),
+      });
+      const data = await res.json();
+      const aiReply = {
+        id: 'ai' + Date.now(),
+        author: '🤖 AI Tutor',
+        body: data.summary || 'I can help with this! The key concept here involves understanding the fundamentals step by step. Try breaking the problem into smaller parts.',
+        upvotes: 0,
+        isAI: true,
+      };
+      setPosts(posts.map(p => p.id === postId ? { ...p, replies: [...p.replies, aiReply] } : p));
+    } catch {
+      const aiReply = { id: 'ai' + Date.now(), author: '🤖 AI Tutor', body: 'Try breaking this problem into smaller parts. Review the lecture materials for this topic and practice with simple examples first.', upvotes: 0, isAI: true };
+      setPosts(posts.map(p => p.id === postId ? { ...p, replies: [...p.replies, aiReply] } : p));
+    }
+    setAiLoading(null);
+  };
+
+  const toggleSolved = (postId) => {
+    setPosts(posts.map(p => p.id === postId ? { ...p, solved: !p.solved } : p));
+  };
+
+  const joinStudyGroup = (postId) => {
+    setPosts(posts.map(p => p.id === postId && p.studyGroup ? { ...p, studyGroup: { ...p.studyGroup, joined: p.studyGroup.joined + 1 } } : p));
+  };
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'linear-gradient(165deg, #f8fafc 0%, #f1f5f9 35%, #e2e8f0 100%)' }}>
-      <AppSidebar currentPath="/community" onSignOut={handleSignOut} />
-
-      <main className="flex-1 overflow-auto">
-        <div className="min-h-full">
-          <div className="max-w-3xl mx-auto px-6 py-8">
-            {/* Header */}
-            <div className="mb-8">
-              <p className="font-medium text-indigo-600 text-sm uppercase tracking-widest mb-1">Communities</p>
-              <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
-                Study together
-              </h1>
-              <p className="text-slate-500 text-sm mt-1.5">Post when and where you&apos;re studying — others can join you.</p>
-            </div>
-
-            {/* Post a study session */}
-            <div
-              className="mb-8 rounded-2xl border border-slate-200/80 p-6 shadow-md overflow-hidden"
-              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06), 0 2px 4px -2px rgba(0,0,0,0.04)' }}
-            >
-              <h2 className="font-['Plus_Jakarta_Sans',sans-serif] text-lg font-semibold text-slate-900 mb-4">Post a study session</h2>
-              <p className="text-sm text-slate-500 mb-4">Say &quot;I&apos;m going to study this topic at this place at this time&quot; and others can accept and join.</p>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label htmlFor="topic" className="block text-sm font-medium text-slate-700 mb-1.5">Topic</label>
-                  <input
-                    id="topic"
-                    type="text"
-                    placeholder="e.g. Computer Security – Format strings"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="place" className="block text-sm font-medium text-slate-700 mb-1.5">Place</label>
-                    <input
-                      id="place"
-                      type="text"
-                      placeholder="e.g. Library Level 4"
-                      value={place}
-                      onChange={(e) => setPlace(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-slate-700 mb-1.5">Date</label>
-                    <input
-                      id="date"
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="time" className="block text-sm font-medium text-slate-700 mb-1.5">Time</label>
-                    <input
-                      id="time"
-                      type="time"
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="note" className="block text-sm font-medium text-slate-700 mb-1.5">Note (optional)</label>
-                    <input
-                      id="note"
-                      type="text"
-                      placeholder="e.g. Bring laptop"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 transition-all duration-200"
-                >
-                  Post request
-                </button>
-              </form>
-            </div>
-
-            {/* Feed of study sessions */}
-            <div className="space-y-4">
-              <h2 className="font-['Plus_Jakarta_Sans',sans-serif] text-lg font-semibold text-slate-900">Study sessions</h2>
-              {posts.length === 0 ? (
-                <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-8 text-center text-slate-500 text-sm">
-                  No study sessions yet. Be the first to post one.
-                </div>
-              ) : (
-                posts.map((post) => (
-                  <article
-                    key={post.id}
-                    className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm hover:shadow-md hover:border-slate-300/80 transition-all duration-200"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-['Plus_Jakarta_Sans',sans-serif] font-semibold text-slate-900 mb-2">{post.topic}</h3>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="text-slate-400">📍</span> {post.place}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="text-slate-400">📅</span> {post.date}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="text-slate-400">🕐</span> {post.time}
-                          </span>
-                        </div>
-                        {post.note && <p className="mt-2 text-sm text-slate-500">{post.note}</p>}
-                        <div className="mt-3 flex items-center gap-2">
-                          <span className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold">
-                            {post.authorInitial}
-                          </span>
-                          <span className="text-sm text-slate-600">{post.author}</span>
-                          {post.joined.length > 0 && (
-                            <span className="text-sm text-slate-500">
-                              · {post.joined.length} joining {post.joined.join(', ')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {!isAuthor(post) && (
-                        <button
-                          type="button"
-                          onClick={() => handleJoin(post.id)}
-                          className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                            isJoined(post)
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/80'
-                              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20'
-                          }`}
-                        >
-                          {isJoined(post) ? 'Joined' : 'Join'}
-                        </button>
-                      )}
-                      {isAuthor(post) && (
-                        <span className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">
-                          Your post
-                        </span>
-                      )}
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+      {/* Header */}
+      <div className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1>
+            <span className="text-slate-500">|</span>
+            <span className="text-sm text-slate-300">Community Forum</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => window.location.href = '/dashboard'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Dashboard</button>
+            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Course</button>
           </div>
         </div>
-      </main>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* Top Bar */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Study Community 💬</h2>
+            <p className="text-sm text-slate-400 mt-1">Ask questions, help peers, form study groups</p>
+          </div>
+          <button onClick={() => setShowNew(true)} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-blue-500/25">
+            + New Post
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-3 mb-6 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Module:</span>
+            {modules.map(m => (
+              <button key={m} onClick={() => setFilterModule(m)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterModule === m ? 'bg-blue-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{m}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Topic:</span>
+            {topics.map(t => (
+              <button key={t} onClick={() => setFilterTopic(t)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterTopic === t ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{t}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* New Post Modal */}
+        {showNew && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
+            <h3 className="text-lg font-bold text-white mb-4">Create New Post</h3>
+            <div className="space-y-4">
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Question or topic title..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+              <textarea value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Describe your question or study group details..." rows={4} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none" />
+              <div className="flex gap-4">
+                <select value={newModule} onChange={e => setNewModule(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-sm">
+                  {modules.filter(m => m !== 'All').map(m => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
+                </select>
+                <select value={newTopic} onChange={e => setNewTopic(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-sm">
+                  {topics.filter(t => t !== 'All').map(t => <option key={t} value={t} className="bg-slate-800">{t}</option>)}
+                </select>
+              </div>
+              {/* Toggles */}
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-slate-300">🎭 Post anonymously</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={isStudyGroup} onChange={e => setIsStudyGroup(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-slate-300">👥 This is a study group invite</span>
+                </label>
+              </div>
+              {/* Study Group Details */}
+              {isStudyGroup && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-medium text-green-300">Study Group Details</p>
+                  <input value={groupDate} onChange={e => setGroupDate(e.target.value)} placeholder="When? (e.g. Tomorrow 7pm)" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-500" />
+                  <input value={groupLocation} onChange={e => setGroupLocation(e.target.value)} placeholder="Where? (e.g. The Hive L3 / Zoom)" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-500" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">Max spots:</span>
+                    <input type="number" value={groupSpots} onChange={e => setGroupSpots(parseInt(e.target.value))} min={2} max={20} className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button onClick={handleNewPost} disabled={!newTitle || !newBody} className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white font-semibold px-6 py-2.5 rounded-xl transition-all">Post</button>
+                <button onClick={() => setShowNew(false)} className="bg-white/10 hover:bg-white/20 text-white px-6 py-2.5 rounded-xl transition-all">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Posts List */}
+        <div className="space-y-4">
+          {filtered.map(post => (
+            <div key={post.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+              <div className="p-6">
+                <div className="flex gap-4">
+                  {/* Vote Column */}
+                  <div className="flex flex-col items-center gap-1 min-w-[40px]">
+                    <button onClick={() => handleVote(post.id, 'up')} className={`text-lg hover:scale-125 transition-transform ${voted[`${post.id}-up`] ? 'text-green-400' : 'text-slate-500'}`}>▲</button>
+                    <span className="text-sm font-bold text-white">{post.upvotes - post.downvotes}</span>
+                    <button onClick={() => handleVote(post.id, 'down')} className={`text-lg hover:scale-125 transition-transform ${voted[`${post.id}-down`] ? 'text-red-400' : 'text-slate-500'}`}>▼</button>
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="bg-blue-500/20 text-blue-300 text-xs px-2 py-0.5 rounded-full">{post.module}</span>
+                      <span className="bg-violet-500/20 text-violet-300 text-xs px-2 py-0.5 rounded-full">{post.topic}</span>
+                      {post.solved && <span className="bg-green-500/20 text-green-300 text-xs px-2 py-0.5 rounded-full">✅ Solved</span>}
+                      {post.studyGroup && <span className="bg-amber-500/20 text-amber-300 text-xs px-2 py-0.5 rounded-full">👥 Study Group</span>}
+                      {post.anonymous && <span className="bg-slate-500/20 text-slate-400 text-xs px-2 py-0.5 rounded-full">🎭 Anonymous</span>}
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-1 cursor-pointer hover:text-blue-300 transition-colors" onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}>{post.title}</h3>
+                    <p className="text-sm text-slate-400 mb-3">{post.body}</p>
+                    {/* Study Group Card */}
+                    {post.studyGroup && (
+                      <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-green-300">📅 {post.studyGroup.date}</p>
+                            <p className="text-sm text-green-200">📍 {post.studyGroup.location}</p>
+                            <p className="text-xs text-green-400 mt-1">{post.studyGroup.joined}/{post.studyGroup.spots} joined</p>
+                          </div>
+                          <button onClick={() => joinStudyGroup(post.id)} className="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all">
+                            Join Group
+                          </button>
+                        </div>
+                        {/* Progress bar for spots */}
+                        <div className="h-1.5 bg-white/10 rounded-full mt-3 overflow-hidden">
+                          <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(post.studyGroup.joined / post.studyGroup.spots) * 100}%` }} />
+                        </div>
+                      </div>
+                    )}
+                    {/* Meta */}
+                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <span>{post.author}</span>
+                      <span>{post.timestamp}</span>
+                      <span>{post.replies.length} replies</span>
+                      <button onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)} className="text-blue-400 hover:text-blue-300">{expandedPost === post.id ? 'Hide replies' : 'Show replies'}</button>
+                      <button onClick={() => toggleSolved(post.id)} className="text-green-400 hover:text-green-300">{post.solved ? 'Unmark solved' : 'Mark solved'}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded Replies */}
+              {expandedPost === post.id && (
+                <div className="border-t border-white/10 bg-white/[0.02] px-6 py-4">
+                  {post.replies.map(reply => (
+                    <div key={reply.id} className={`p-4 rounded-xl mb-3 ${reply.isAI ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-white/5 border border-white/10'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-sm font-medium ${reply.isAI ? 'text-blue-300' : 'text-slate-300'}`}>{reply.author}</span>
+                        {reply.isAI && <span className="bg-blue-500/20 text-blue-300 text-xs px-2 py-0.5 rounded-full">AI Generated</span>}
+                      </div>
+                      <p className="text-sm text-slate-300 leading-relaxed">{reply.body}</p>
+                    </div>
+                  ))}
+                  {/* Reply Actions */}
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => setShowReplying(showReplying === post.id ? null : post.id)} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">💬 Reply</button>
+                    <button onClick={() => handleAIReply(post.id)} disabled={aiLoading === post.id} className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm px-4 py-2 rounded-lg transition-all">
+                      {aiLoading === post.id ? '⏳ AI thinking...' : '🤖 Ask AI to answer'}
+                    </button>
+                  </div>
+                  {/* Reply Form */}
+                  {showReplying === post.id && (
+                    <div className="mt-3 space-y-3">
+                      <textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Write your reply..." rows={3} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none" />
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={replyAnonymous} onChange={e => setReplyAnonymous(e.target.checked)} className="w-4 h-4 rounded" />
+                          <span className="text-xs text-slate-400">🎭 Reply anonymously</span>
+                        </label>
+                        <button onClick={() => handleReply(post.id)} disabled={!replyText} className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white text-sm px-4 py-2 rounded-lg transition-all">Post Reply</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-3">🔍</div>
+            <p className="text-slate-400">No posts found for this filter. Be the first to post!</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

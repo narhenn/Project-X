@@ -56,7 +56,7 @@ export default function DashboardPage() {
         body: JSON.stringify({ sessionsThisWeek: 12, avgDurationMinutes: 120, avgSessionHour: 22, scoresTrend: [90, 85, 70], streakDays: 14, totalHoursThisWeek: 28 }),
       });
       const result = await res.json();
-      setBurnout(result);
+      setBurnout({ riskLevel: result.riskLevel || "low", riskScore: result.riskScore || 0, signals: result.signals || [], recommendation: result.recommendation || "Your study patterns look healthy!" });
     } catch { setBurnout({ riskLevel: 'moderate', riskScore: 45, signals: ['Late night studying', 'Declining scores'], recommendation: 'Consider taking a break and getting some rest.' }); }
     setBurnoutLoading(false);
   };
@@ -85,7 +85,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1>
           <div className="flex items-center gap-4">
-            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Continue Learning</button>
+            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Continue Learning</button><button onClick={() => window.location.href = '/community'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">💬 Community</button>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">N</div>
               <span className="text-sm text-slate-300">{data.student.name}</span>
