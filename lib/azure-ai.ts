@@ -31,7 +31,18 @@ function getConfig(): AzureConfig {
   };
 }
 
+function ensureAzureConfigured(): void {
+  const config = getConfig();
+  if (!config.apiKey?.trim()) {
+    throw new Error('Azure OpenAI is not configured. Add AZURE_OPENAI_API_KEY to .env.local.');
+  }
+  if (!config.endpoint?.trim()) {
+    throw new Error('Azure OpenAI is not configured. Add AZURE_OPENAI_ENDPOINT to .env.local.');
+  }
+}
+
 async function callAzureOpenAI(systemPrompt: string, userPrompt: string, maxTokens: number = 1000): Promise<string> {
+  ensureAzureConfigured();
   const config = getConfig();
   const url = `${config.endpoint}/openai/deployments/${config.deployment}/chat/completions?api-version=${config.apiVersion}`;
 
@@ -123,6 +134,108 @@ Return as JSON array: [{"front":"...","back":"...","difficulty":"..."}]`;
       back: 'Please review the lecture material for this segment.',
       difficulty: 'medium',
     }];
+  }
+}
+
+// ============================================================
+// FEATURE 1b: Segment Quiz Questions (AI-generated per segment)
+// ============================================================
+
+export interface QuizQuestionForAI {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+}
+
+/**
+ * Generate 5 multiple-choice quiz questions by reading the segment's slides document.
+ * Questions are generated ONLY from the provided segmentSlides text; the AI must not use external knowledge.
+ */
+const MAX_SLIDES_CHARS = 12000;
+
+export async function generateSegmentQuizQuestions(
+  segmentIndex: number,
+  segmentSlides: string
+): Promise<QuizQuestionForAI[]> {
+  const truncated = segmentSlides.length > MAX_SLIDES_CHARS
+    ? segmentSlides.slice(0, MAX_SLIDES_CHARS) + '\n\n[... content truncated for length ...]'
+    : segmentSlides;
+  if (segmentSlides.length > MAX_SLIDES_CHARS) {
+    log.warn('Segment slides truncated for API', { segmentIndex, original: segmentSlides.length, max: MAX_SLIDES_CHARS });
+  }
+  log.info('Generating segment quiz questions from slides', { segmentIndex, contentLength: truncated.length });
+
+  const systemPrompt = `You are an expert educational assessor. Your task is to read the provided segment slides document and generate quiz questions based ONLY on that content.
+
+Rules:
+- Use ONLY information explicitly stated or clearly implied in the segment slides. Do not add facts from general knowledge.
+- Generate exactly 5 multiple-choice questions. Each question must have exactly 4 options.
+- Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
+- Each object: "id" (string, e.g. "s0-q1"), "question" (string), "options" (array of 4 strings), "correctIndex" (number 0-3 for the correct option).`;
+
+  const userPrompt = `Below is the slides document for segment ${segmentIndex + 1}. Read it carefully and generate 5 multiple-choice questions that test understanding of this material. Base every question and the correct answer only on this text. Use ids s${segmentIndex}-q1, s${segmentIndex}-q2, ... s${segmentIndex}-q5.
+
+--- SEGMENT SLIDES ---
+${truncated}
+--- END SLIDES ---
+
+Return only the JSON array of 5 questions.`;
+
+  const response = await callAzureOpenAI(systemPrompt, userPrompt, 2500);
+  const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  try {
+    const questions: QuizQuestionForAI[] = JSON.parse(cleaned);
+    if (!Array.isArray(questions) || questions.length === 0) throw new Error('Invalid format');
+    return questions.slice(0, 5).map((q, i) => ({
+      id: q.id || `s${segmentIndex}-q${i + 1}`,
+      question: q.question || '',
+      options: Array.isArray(q.options) ? q.options.slice(0, 4) : [],
+      correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < 4 ? q.correctIndex : 0,
+    }));
+  } catch (e) {
+    log.error('Failed to parse segment quiz response', { response: cleaned.substring(0, 300) });
+    throw e;
+  }
+}
+
+// ============================================================
+// FEATURE 1c: Segment Flashcards (AI-generated for segment review)
+// ============================================================
+
+export type SegmentFlashcard = { front: string; back: string };
+
+/**
+ * Generate flashcards for a video segment from the segment slides document (for review after failing quiz).
+ */
+export async function generateSegmentFlashcards(
+  segmentIndex: number,
+  segmentSlides: string,
+  count: number = 6
+): Promise<SegmentFlashcard[]> {
+  log.info('Generating segment flashcards from slides', { segmentIndex, contentLength: segmentSlides.length, count });
+
+  const systemPrompt = `You are an expert tutor. Read the provided segment slides and create concise review flashcards based ONLY on that content.
+Return ONLY a valid JSON array. No markdown, no code fences. Each object: "front" (question or key term), "back" (short answer from the slides).`;
+
+  const userPrompt = `Below is the slides document for segment ${segmentIndex + 1}. Generate ${count} flashcards to help the student review. Base every front/back only on this text. Return only the JSON array.
+
+--- SEGMENT SLIDES ---
+${segmentSlides}
+--- END SLIDES ---`;
+
+  const response = await callAzureOpenAI(systemPrompt, userPrompt, 1500);
+  const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  try {
+    const cards: SegmentFlashcard[] = JSON.parse(cleaned);
+    if (!Array.isArray(cards)) throw new Error('Invalid format');
+    return cards.slice(0, count).map((c) => ({
+      front: c.front || '',
+      back: c.back || '',
+    }));
+  } catch (e) {
+    log.error('Failed to parse segment flashcards response', { response: cleaned.substring(0, 300) });
+    throw e;
   }
 }
 

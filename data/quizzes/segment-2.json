@@ -1,0 +1,32 @@
+[
+  {
+    "id": "s2-q1",
+    "question": "What is the principle of least privilege?",
+    "options": ["Users should have maximum access", "Processes and users should have only the minimum access needed to perform their task", "Privilege is not important", "All users share the same privileges"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s2-q2",
+    "question": "What is defense in depth?",
+    "options": ["A single strong firewall", "Using multiple layers of security controls so that if one fails, others may still protect the system", "Only encrypting data at rest", "Relying on one authentication method"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s2-q3",
+    "question": "Why is input validation important for security?",
+    "options": ["It makes programs faster", "It helps prevent injection and malformed data from causing vulnerabilities", "It is required by the compiler", "It reduces code size"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s2-q4",
+    "question": "What does secure coding aim to achieve?",
+    "options": ["Only performance", "Writing code that minimizes vulnerabilities and follows security best practices", "Shorter code", "Faster deployment"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s2-q5",
+    "question": "Which is a common secure coding guideline?",
+    "options": ["Trust all user input", "Validate and sanitize all external input", "Use the fastest functions regardless of safety", "Disable all security features for speed"],
+    "correctIndex": 1
+  }
+]

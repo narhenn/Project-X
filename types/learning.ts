@@ -32,5 +32,10 @@ export type ModuleConfig = {
   segments?: Segment[];
   numberOfSegments?: number;
   defaultDurationSeconds?: number;
+  /** Optional: used by AI to generate quiz questions and flashcards per segment */
+  moduleTopic?: string;
+  segmentTitles?: string[];
+  /** Slide/document text per segment. AI reads this to generate questions. One string per segment. */
+  segmentSlides?: string[];
   quizzes: SegmentQuiz[];
 };

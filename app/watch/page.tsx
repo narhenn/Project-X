@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { QuizModal } from '@/components/QuizModal';
 import { ChatbotModal } from '@/components/ChatbotModal';
@@ -9,11 +10,12 @@ import { demoModule } from '@/data/demoModule';
 import { getSegmentFlashcards } from '@/data/segmentFlashcards';
 import { progressService } from '@/lib/progress';
 import { aiHelpService } from '@/lib/ai-help';
-import type { Segment, ModuleProgress } from '@/types/learning';
+import type { Segment, ModuleProgress, QuizQuestion } from '@/types/learning';
 import type { Flashcard } from '@/lib/ai-help';
 
 const DEMO_USER = 'user-1';
 const MODULE_ID = 'demo-1';
+const COOLDOWN_MS = 60_000; // 1 min after 429 before allowing retry
 
 function buildSegments(duration: number, count: number): Segment[] {
   const segLen = duration / count;
@@ -33,6 +35,54 @@ export default function WatchPage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [flashcardOpen, setFlashcardOpen] = useState(false);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [questionsError, setQuestionsError] = useState(false);
+  const [questionsErrorMessage, setQuestionsErrorMessage] = useState<string | null>(null);
+  /** Segment slides from PDF (content/slides.pdf) or fallback to demoModule.segmentSlides */
+  const [segmentSlidesFromApi, setSegmentSlidesFromApi] = useState<string[] | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+
+  const inFlightRef = useRef<Record<string, Promise<QuizQuestion[]> | null>>({});
+  const lastFailRef = useRef<Record<string, number>>({});
+
+  const fetchQuizOnce = useCallback(async (segmentIndex: number, segmentSlides: string): Promise<QuizQuestion[]> => {
+    const key = String(segmentIndex);
+    const now = Date.now();
+    const lastFail = lastFailRef.current[key] ?? 0;
+    if (now - lastFail < COOLDOWN_MS) {
+      throw new Error('Rate limit exceeded. Please wait a minute and try again.');
+    }
+    if (inFlightRef.current[key]) {
+      return inFlightRef.current[key]!;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    const promise = (async () => {
+      try {
+        const res = await fetch('/api/generate-quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segmentIndex, segmentSlides }),
+          signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 429) lastFailRef.current[key] = Date.now();
+          throw new Error(typeof data.error === 'string' ? data.error : 'Failed to generate quiz');
+        }
+        if (!Array.isArray(data.questions) || data.questions.length === 0) {
+          throw new Error('No questions returned.');
+        }
+        return data.questions as QuizQuestion[];
+      } finally {
+        clearTimeout(timeoutId);
+        inFlightRef.current[key] = null;
+      }
+    })();
+    inFlightRef.current[key] = promise;
+    return promise;
+  }, []);
 
   const loadProgress = useCallback(async () => {
     const p = await progressService.getProgress(DEMO_USER, MODULE_ID);
@@ -54,6 +104,19 @@ export default function WatchPage() {
   useEffect(() => {
     if (demoModule.segments?.length) setSegments(demoModule.segments);
   }, []);
+
+  useEffect(() => {
+    fetch(`/api/segment-slides?moduleId=${MODULE_ID}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.segmentSlides) && data.segmentSlides.length > 0) {
+          setSegmentSlidesFromApi(data.segmentSlides);
+        }
+      })
+      .catch(() => { /* keep null, use demo fallback */ });
+  }, []);
+
+  const effectiveSegmentSlides = segmentSlidesFromApi ?? demoModule.segmentSlides ?? [];
 
   const numberOfSegments = demoModule.segments?.length ?? demoModule.numberOfSegments ?? 3;
   const durationReady = useCallback(
@@ -77,13 +140,11 @@ export default function WatchPage() {
   const segmentForLost = currentSegmentIndex >= 0 ? currentSegmentIndex : 0;
 
   const handleSegmentEnd = useCallback((segmentIndex: number) => {
-    const quiz = demoModule.quizzes?.find((q) => q.segmentIndex === segmentIndex);
-    if (quiz?.questions?.length) {
-      setQuizSegmentIndex(segmentIndex);
-      setQuizOpen(true);
-    }
+    if (!effectiveSegmentSlides[segmentIndex]) return;
+    setQuizSegmentIndex(segmentIndex);
+    setQuizOpen(true);
     progressService.recordSegmentReached(DEMO_USER, MODULE_ID, segmentIndex).then(loadProgress);
-  }, [loadProgress]);
+  }, [loadProgress, effectiveSegmentSlides]);
 
   const handleQuizPass = useCallback(
     async (score: number) => {
@@ -96,32 +157,95 @@ export default function WatchPage() {
   );
 
   const handleQuizFail = useCallback(async () => {
-    const prevAttempts = progress?.segmentAttempts[quizSegmentIndex] ?? 0;
     await progressService.recordQuizAttempt(DEMO_USER, MODULE_ID, quizSegmentIndex);
     await loadProgress();
-    const newAttempts = prevAttempts + 1;
-    if (newAttempts >= 2) {
-      const cards = getSegmentFlashcards(quizSegmentIndex);
-      setFlashcards(cards.length > 0 ? cards : await aiHelpService.getFlashcards(quizSegmentIndex));
-      setQuizOpen(false);
-      setFlashcardOpen(true);
+  }, [quizSegmentIndex, loadProgress]);
+
+  const handleShowFlashcards = useCallback(async () => {
+    const segmentSlides = effectiveSegmentSlides[quizSegmentIndex];
+    if (segmentSlides) {
+      try {
+        const res = await fetch('/api/generate-segment-flashcards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segmentIndex: quizSegmentIndex, segmentSlides, count: 6 }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.flashcards) && data.flashcards.length > 0) {
+            setFlashcards(data.flashcards);
+            setQuizOpen(false);
+            setFlashcardOpen(true);
+            return;
+          }
+        }
+      } catch {
+        // fallback below
+      }
     }
-  }, [progress?.segmentAttempts, quizSegmentIndex, loadProgress]);
+    const cards = getSegmentFlashcards(quizSegmentIndex);
+    setFlashcards(cards.length > 0 ? cards : await aiHelpService.getFlashcards(quizSegmentIndex));
+    setQuizOpen(false);
+    setFlashcardOpen(true);
+  }, [quizSegmentIndex, effectiveSegmentSlides]);
 
   const handleLostClick = useCallback(() => {
     setChatbotOpen(true);
   }, []);
 
   const openQuizForSegment = useCallback((segmentIndex: number) => {
-    const quiz = demoModule.quizzes?.find((q) => q.segmentIndex === segmentIndex);
-    if (reached >= segmentIndex && quiz?.questions?.length) {
+    const hasSlides = !!effectiveSegmentSlides[segmentIndex];
+    if (reached >= segmentIndex && hasSlides) {
       setQuizSegmentIndex(segmentIndex);
       setQuizOpen(true);
     }
-  }, [reached]);
+  }, [reached, effectiveSegmentSlides]);
 
-  const quizForSegment = demoModule.quizzes.find((q) => q.segmentIndex === quizSegmentIndex);
-  const questions = quizForSegment?.questions ?? [];
+  const [quizRetryKey, setQuizRetryKey] = useState(0);
+
+  // Load quiz: one request per segment (deduped with prefetch), cooldown after 429
+  useEffect(() => {
+    if (!quizOpen) return;
+    const segmentIndex = quizSegmentIndex;
+    const segmentSlides = effectiveSegmentSlides[segmentIndex];
+    if (!segmentSlides) {
+      setQuestions([]);
+      setQuestionsLoading(false);
+      setQuestionsError(false);
+      return;
+    }
+    setQuestions([]);
+    setQuestionsError(false);
+    setQuestionsErrorMessage(null);
+    setQuestionsLoading(true);
+
+    fetchQuizOnce(segmentIndex, segmentSlides)
+      .then((q) => {
+        setQuestions(q);
+      })
+      .catch((err: Error) => {
+        setQuestionsError(true);
+        const msg = err?.name === 'AbortError'
+          ? 'Request took too long. Try again or use a shorter segment.'
+          : (err?.message ?? 'Failed to generate quiz.');
+        setQuestionsErrorMessage(msg);
+        if (typeof msg === 'string' && msg.toLowerCase().includes('rate limit')) {
+          setCooldownUntil(Date.now() + COOLDOWN_MS);
+        }
+      })
+      .finally(() => {
+        setQuestionsLoading(false);
+      });
+  }, [quizOpen, quizSegmentIndex, quizRetryKey, effectiveSegmentSlides, fetchQuizOnce]);
+
+  // Clear cooldown when timer expires so Retry button re-enables
+  useEffect(() => {
+    if (cooldownUntil <= 0) return;
+    const t = setTimeout(() => setCooldownUntil(0), cooldownUntil - Date.now());
+    return () => clearTimeout(t);
+  }, [cooldownUntil]);
+
+  const questionsToShow = questions;
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -130,56 +254,124 @@ export default function WatchPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-900 text-white p-4 md:p-6">
-      <h1 className="text-2xl font-bold mb-2">Content Engine — Watch</h1>
-      <p className="text-slate-400 text-sm mb-4">
-        {reached < 0
-          ? `Watch the video to the end of each segment to unlock its quiz.`
-          : `Segment ${reached + 1} of ${numberOfSegments} reached • Pass the quiz at each segment end to continue.`}
-      </p>
+    <div className="min-h-screen w-full text-white" style={{ background: 'linear-gradient(180deg, var(--watch-bg) 0%, #1e293b 50%, var(--watch-bg) 100%)' }}>
+      {/* Back to courses - top left corner */}
+      <Link
+        href="/course"
+        className="fixed left-4 top-4 z-10 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors md:left-6 md:top-6"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to courses
+      </Link>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {segments.map((seg, i) => {
-          const hasQuiz = demoModule.quizzes?.find((q) => q.segmentIndex === i)?.questions?.length;
-          const passed = (progress?.quizScores?.[i] ?? 0) >= 70;
-          const prevPassed = i === 0 || (progress?.quizScores?.[i - 1] ?? 0) >= 70;
-          const canOpen = hasQuiz && reached >= i && prevPassed;
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => canOpen && openQuizForSegment(i)}
-              disabled={!canOpen}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
-                canOpen ? 'bg-slate-600 hover:bg-slate-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-              }`}
-              title={canOpen ? `Take quiz: Segment ${i + 1}` : prevPassed ? `Watch to ${formatTime(seg.end)} to unlock` : `Pass Segment ${i} first`}
-            >
-              Segment {i + 1}
-              {passed && <span className="text-green-400" aria-hidden>✓</span>}
-            </button>
-          );
-        })}
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
+        {/* Header */}
+        <header className="mb-8">
+          <p className="font-medium text-indigo-300/90 text-sm uppercase tracking-widest mb-1">Content Engine</p>
+          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl md:text-4xl font-bold tracking-tight text-white">
+            Watch
+          </h1>
+          <p className="mt-2 text-slate-400 text-sm max-w-xl">
+            {reached < 0
+              ? 'Watch the video to the end of each segment to unlock its quiz.'
+              : `Segment ${reached + 1} of ${numberOfSegments} reached — Pass the quiz at each segment end to continue.`}
+          </p>
+        </header>
+
+        {/* Segment stepper */}
+        <div className="mb-8 flex items-center gap-0">
+          {segments.map((seg, i) => {
+            const hasSlides = !!effectiveSegmentSlides[i];
+            const passed = (progress?.quizScores?.[i] ?? 0) >= 70;
+            const prevPassed = i === 0 || (progress?.quizScores?.[i - 1] ?? 0) >= 70;
+            const canOpen = hasSlides && reached >= i && prevPassed;
+            const isLast = i === segments.length - 1;
+            return (
+              <div key={i} className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => canOpen && openQuizForSegment(i)}
+                  disabled={!canOpen}
+                  title={canOpen ? `Take quiz: Segment ${i + 1}` : prevPassed ? `Watch to ${formatTime(seg.end)} to unlock` : `Pass Segment ${i} first`}
+                  className={`
+                    relative flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200
+                    ${passed
+                      ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30 hover:bg-emerald-500/30 hover:ring-emerald-400/50'
+                      : canOpen
+                        ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/40 hover:bg-indigo-500/30 hover:ring-indigo-400/60 hover:shadow-[0_0_20px_var(--watch-glow)]'
+                        : 'bg-slate-700/50 text-slate-500 cursor-not-allowed ring-1 ring-slate-600/50'}
+                  `}
+                >
+                  <span>Segment {i + 1}</span>
+                  {passed && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/30 text-emerald-300" aria-hidden>
+                      ✓
+                    </span>
+                  )}
+                </button>
+                {!isLast && (
+                  <div
+                    className={`mx-0.5 h-px w-4 md:w-6 flex-shrink-0 ${i < reached ? 'bg-emerald-500/40' : 'bg-slate-600/60'}`}
+                    aria-hidden
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Video card */}
+        <div
+          className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-800/40 shadow-2xl ring-1 ring-black/20"
+          style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05)' }}
+        >
+          <div className="border-b border-white/5 bg-slate-800/60 px-4 py-3 md:px-5 md:py-3.5">
+            <p className="font-['Plus_Jakarta_Sans',sans-serif] text-sm font-semibold text-slate-200">Lecture</p>
+            <p className="text-xs text-slate-500 mt-0.5">Complete each segment and pass the quiz to continue</p>
+          </div>
+          <div className="p-3 md:p-4">
+            <div className="relative overflow-hidden rounded-xl bg-black shadow-inner">
+              <VideoPlayer
+                videoId={demoModule.youtubeVideoId}
+                segments={segments}
+                allowedEndTime={allowedEndTime}
+                currentSegmentIndex={currentSegmentIndex >= 0 ? currentSegmentIndex : 0}
+                onSegmentEnd={handleSegmentEnd}
+                onDurationReady={durationReady}
+                onTimeUpdate={setCurrentTime}
+                paused={paused}
+                setPaused={setPaused}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLostClick}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-200 transition-all hover:bg-amber-500/20 hover:border-amber-500/60 hover:text-amber-100"
+              >
+                <span className="text-amber-400" aria-hidden>?</span>
+                I&apos;m Lost
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="relative">
-        <VideoPlayer
-          videoId={demoModule.youtubeVideoId}
-          segments={segments}
-          allowedEndTime={allowedEndTime}
-          currentSegmentIndex={currentSegmentIndex >= 0 ? currentSegmentIndex : 0}
-          onSegmentEnd={handleSegmentEnd}
-          onDurationReady={durationReady}
-          onTimeUpdate={setCurrentTime}
-          paused={paused}
-          setPaused={setPaused}
-        />
-        <button type="button" onClick={handleLostClick} className="mt-3 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sm font-medium">
-          I&apos;m Lost
-        </button>
-      </div>
-
-      <QuizModal open={quizOpen} segmentIndex={quizSegmentIndex} questions={questions} onPass={handleQuizPass} onFail={handleQuizFail} />
+      <QuizModal
+        open={quizOpen}
+        segmentIndex={quizSegmentIndex}
+        questions={questionsToShow}
+        loading={questionsLoading}
+        error={questionsError}
+        errorMessage={questionsErrorMessage}
+        cooldownUntil={cooldownUntil}
+        onRetry={() => setQuizRetryKey((k) => k + 1)}
+        onPass={handleQuizPass}
+        onFail={handleQuizFail}
+        onShowFlashcards={handleShowFlashcards}
+      />
       <ChatbotModal
         open={chatbotOpen}
         onClose={() => setChatbotOpen(false)}
@@ -193,7 +385,6 @@ export default function WatchPage() {
         cards={flashcards}
         onClose={() => { setFlashcardOpen(false); setQuizOpen(true); }}
       />
-
     </div>
   );
 }

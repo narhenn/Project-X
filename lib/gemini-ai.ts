@@ -1,15 +1,148 @@
 import { logger } from './logger';
+
 const log = logger.child('GeminiAI');
-async function callGemini(prompt, maxTokens = 1000) {
-  const apiKey = process.env.GEMINI_API_KEY;
+
+function getGeminiKey(): string {
+  return (
+    process.env.GEMINI_API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+    ''
+  ).trim();
+}
+
+const RETRY_DELAYS_MS = [2000]; // single retry for 429 → fail fast (~2–3s instead of 15–20s)
+const MAX_RETRIES = 1;
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGemini(prompt: string, maxTokens = 1000): Promise<string> {
+  const apiKey = getGeminiKey();
+  if (!apiKey) {
+    throw new Error('Gemini is not configured. Add GEMINI_API_KEY or NEXT_PUBLIC_GEMINI_API_KEY to .env.local.');
+  }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  log.debug('Calling Gemini API', { maxTokens });
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 } }) });
-  if (!response.ok) { const e = await response.text(); log.error('Gemini API error', { status: response.status, error: e }); throw new Error(`Gemini error: ${response.status}`); }
-  const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  log.info('Gemini response received', { length: content.length });
-  return content;
+
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_DELAYS_MS[attempt - 1] ?? 10000;
+      log.info('Retrying Gemini after rate limit', { attempt, delayMs: delay });
+      await sleep(delay);
+    }
+
+    log.debug('Calling Gemini API', { maxTokens, attempt: attempt + 1 });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
+      }),
+      signal: AbortSignal.timeout(60000), // 60s server timeout
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      log.info('Gemini response received', { length: content.length });
+      return content;
+    }
+
+    const e = await response.text();
+    log.error('Gemini API error', { status: response.status, error: e });
+
+    if (response.status === 429 && attempt < MAX_RETRIES) {
+      lastError = new Error('Rate limit exceeded. Wait a moment and try again.');
+      continue;
+    }
+
+    if (response.status === 429) {
+      throw new Error('Rate limit exceeded. Please wait a minute and try again.');
+    }
+    throw new Error(`Gemini error: ${response.status}`);
+  }
+
+  throw lastError ?? new Error('Gemini request failed');
+}
+
+const MAX_SLIDES_CHARS = 4000;
+
+/** Generate 5 quiz questions from segment slides text (Gemini). */
+export async function generateSegmentQuizQuestions(
+  segmentIndex: number,
+  segmentSlides: string
+): Promise<Array<{ id: string; question: string; options: string[]; correctIndex: number }>> {
+  const truncated =
+    segmentSlides.length > MAX_SLIDES_CHARS
+      ? segmentSlides.slice(0, MAX_SLIDES_CHARS) + '\n\n[... content truncated ...]'
+      : segmentSlides;
+  log.info('Generating segment quiz from slides (Gemini)', { segmentIndex, contentLength: truncated.length });
+
+  const prompt = `You are an expert educational assessor. Read the segment slides below and generate quiz questions based ONLY on that content.
+
+Rules:
+- Use ONLY information from the segment slides. Generate exactly 5 multiple-choice questions, each with exactly 4 options.
+- Return ONLY a valid JSON array. No markdown, no code fences. Each object: "id" (string, e.g. "s0-q1"), "question" (string), "options" (array of 4 strings), "correctIndex" (number 0-3 for the correct option). Use ids s${segmentIndex}-q1, s${segmentIndex}-q2, ... s${segmentIndex}-q5.
+
+--- SEGMENT SLIDES ---
+${truncated}
+--- END SLIDES ---
+
+Return only the JSON array of 5 questions.`;
+
+  const raw = await callGemini(prompt, 2500);
+  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  try {
+    const questions = JSON.parse(cleaned);
+    if (!Array.isArray(questions) || questions.length === 0) throw new Error('Invalid format');
+    return questions.slice(0, 5).map((q: any, i: number) => ({
+      id: q.id || `s${segmentIndex}-q${i + 1}`,
+      question: q.question || '',
+      options: Array.isArray(q.options) ? q.options.slice(0, 4) : [],
+      correctIndex:
+        typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < 4 ? q.correctIndex : 0,
+    }));
+  } catch (e) {
+    log.error('Failed to parse Gemini quiz response', { preview: cleaned.substring(0, 300) });
+    throw e;
+  }
+}
+
+/** Generate flashcards from segment slides text (Gemini). */
+export async function generateSegmentFlashcards(
+  segmentIndex: number,
+  segmentSlides: string,
+  count = 6
+): Promise<Array<{ front: string; back: string }>> {
+  const truncated =
+    segmentSlides.length > MAX_SLIDES_CHARS
+      ? segmentSlides.slice(0, MAX_SLIDES_CHARS) + '\n\n[... content truncated ...]'
+      : segmentSlides;
+  log.info('Generating segment flashcards from slides (Gemini)', { segmentIndex, count });
+
+  const prompt = `You are an expert tutor. Read the segment slides below and create ${count} review flashcards based ONLY on that content. Return ONLY a valid JSON array. No markdown, no code fences. Each object: "front" (question or term), "back" (short answer).
+
+--- SEGMENT SLIDES ---
+${truncated}
+--- END SLIDES ---
+
+Return only the JSON array.`;
+
+  const raw = await callGemini(prompt, 1500);
+  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  try {
+    const cards = JSON.parse(cleaned);
+    if (!Array.isArray(cards)) throw new Error('Invalid format');
+    return cards.slice(0, count).map((c: any) => ({
+      front: c.front || '',
+      back: c.back || '',
+    }));
+  } catch (e) {
+    log.error('Failed to parse Gemini flashcards response', { preview: cleaned.substring(0, 300) });
+    throw e;
+  }
 }
 export async function generateFlashcards(topic, missedQuestions, learningStyle) {
   log.info('Generating flashcards', { topic, missedCount: missedQuestions.length });

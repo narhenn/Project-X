@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 :root {
   --brand-500: #3b82f6;
@@ -10,6 +10,10 @@
   --mastery-good: #10b981;
   --mastery-average: #f59e0b;
   --mastery-weak: #f43f5e;
+  --watch-bg: #0f172a;
+  --watch-surface: rgba(30, 41, 59, 0.6);
+  --watch-border: rgba(148, 163, 184, 0.12);
+  --watch-glow: rgba(99, 102, 241, 0.15);
 }
 
 body {

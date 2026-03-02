@@ -99,7 +99,7 @@ export function VideoPlayer({
   }, [onDurationReady]);
 
   return (
-    <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
+    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
       <YouTube
         videoId={videoId}
         opts={YOUTUBE_OPTS}
@@ -111,10 +111,15 @@ export function VideoPlayer({
         <button
           type="button"
           onClick={play}
-          className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-lg"
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50 text-white backdrop-blur-[2px] transition-opacity hover:bg-black/55"
           aria-label="Resume"
         >
-          Click to resume
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 ring-4 ring-white/10">
+            <svg className="ml-1 h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path d="M8 5v14l11-7L8 5z" />
+            </svg>
+          </span>
+          <span className="text-sm font-medium text-white/95">Click to resume</span>
         </button>
       )}
     </div>

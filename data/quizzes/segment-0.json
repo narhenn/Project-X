@@ -1,0 +1,32 @@
+[
+  {
+    "id": "s0-q1",
+    "question": "What is the primary goal of format string vulnerabilities?",
+    "options": ["Reading from memory", "Writing to arbitrary memory", "Crashing the program", "Improving performance"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s0-q2",
+    "question": "Which function in C is commonly vulnerable to format string attacks when user input is passed directly?",
+    "options": ["malloc()", "printf()", "strcpy()", "fopen()"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s0-q3",
+    "question": "What does the %n format specifier do in printf?",
+    "options": ["Prints a newline", "Writes the number of bytes printed so far into a pointer", "Prints an integer", "Skips the next argument"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s0-q4",
+    "question": "How can developers prevent format string vulnerabilities?",
+    "options": ["Use more format specifiers", "Never use printf", "Never pass user-controlled input as the format string; use a constant format", "Use shorter strings"],
+    "correctIndex": 2
+  },
+  {
+    "id": "s0-q5",
+    "question": "Which of these is a safe practice when using printf with user input?",
+    "options": ["printf(user_input)", "printf(\"%s\", user_input)", "printf(user_input, ...)", "printf(\"%s\", user_input, extra)"],
+    "correctIndex": 1
+  }
+]

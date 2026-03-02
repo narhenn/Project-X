@@ -4,6 +4,47 @@ export const demoModule: ModuleConfig = {
   moduleId: 'demo-1',
   youtubeVideoId: 'tlIUZe4wnIg',
   defaultDurationSeconds: 1955,
+  moduleTopic: 'Computer Security: format strings, printf vulnerabilities, and related attacks (leak, crash, overwrite). Later segments cover integer overflow, command injection, SQL injection, XSS.',
+  segmentTitles: [
+    'Format specifiers and printf vulnerability',
+    'Format string attacks: leak, crash, and overwrite (%n)',
+    'Fixes and other vulnerabilities (overflow, injection, XSS)',
+  ],
+  /** Slide content per segment. AI reads this to generate quiz questions. */
+  segmentSlides: [
+    `Segment 1 – Format specifiers and printf vulnerability
+
+Format specifiers (escape sequences) are essentially instructions. In printf, the first argument is the format string. The format string contains literal text and placeholders (format specifiers) that tell printf how to interpret the next arguments.
+
+Important points from the slides:
+- printf takes a format string as first argument, then a variable number of arguments.
+- The number of format specifiers in the format string should match the number of additional arguments.
+- Common format specifiers: %d for signed integer, %u for unsigned, %s for string (pointer to char), %p for pointer address, %x for hex, %c for character.
+- A vulnerable program: when the format string itself is controlled by user input (e.g. printf(user_input);), an attacker can inject format specifiers. printf does not know how many arguments were actually passed; it reads the format string and assumes arguments exist. This mismatch can be exploited.
+- The slides show a vulnerable C program where printf(user_input); is the main problem—user_input becomes the format string, so an attacker can use %x, %s, %n etc. to leak or corrupt memory.`,
+
+    `Segment 2 – Format string attacks: CIA (Confidentiality, Integrity, Availability)
+
+The lecture groups format-string attacks into three security goals: Confidentiality (leak), Availability (crash), and Integrity (modify memory).
+
+Attack 1 – Leak (Confidentiality): When printf is called with a format specifier like %d or %x but without the corresponding argument, printf will take whatever value is next on the stack and interpret it as the missing argument. So printf("%d\\n"); with no second argument retrieves another stack value and prints it. An attacker can use multiple %x or %p to dump stack contents and leak sensitive data.
+
+Attack 2 – Crash (Availability): If printf("%s\\n"); is called without the string argument, it interprets some stack value as a pointer to a string and tries to dereference it. That address may be invalid or point to protected memory, causing a crash. Adding more %s increases the chance of hitting a bad address.
+
+Attack 3 – Modify memory (Integrity): The %n specifier is special. In correct usage, printf("abcdefg%n\\n", &x); writes the number of characters printed so far (7) into the integer pointed to by x. In an attack, the attacker can use %n to write to arbitrary memory addresses—overwriting return addresses, function pointers, or security flags. The goal is to overwrite important memory, not just leak or crash. Other printf-family functions (fprintf, sprintf, snprintf, vprintf, syslog) can have similar format string issues.`,
+
+    `Segment 3 – Fixes and other vulnerabilities
+
+Format string fix: Never let user input become the format string. The safe replacement is to use a fixed format string and pass user input as an argument: printf("%s\\n", user_input); so user_input is treated as data, not as format instructions.
+
+Integer overflow: When an arithmetic operation exceeds the maximum value (or goes below the minimum) that the type can represent, the result can wrap around and become incorrect. Example: in the "bypass length checking" scenario, if (len1 + len2 + 1 <= sizeof(buf)) can be unsafe because len1 + len2 might overflow and wrap to a small value, making the check pass when it should not. strncpy and similar do not prevent overflow in the length calculation itself.
+
+Command injection: If a program builds a shell command from user input (e.g. system("cat " + user_input)), malicious input like hello.txt; rm -rf / can inject extra commands. Defenses: avoid shell when possible; use safer APIs; validate and sanitize input.
+
+SQL injection: User input is concatenated into an SQL query, so input like ' OR 1=1 -- can change the query logic. The main defense is parameterized queries (prepared statements), where user input is bound as data and never interpreted as SQL.
+
+XSS (Cross-site scripting): Attacker injects malicious JavaScript into a web page so it runs in the victim's browser. Stored XSS: payload is saved on the server and shown to users later. Reflected XSS: payload is in the request and immediately reflected back. Defense: Content Security Policy (CSP), avoid inline scripts, sanitize output.`,
+  ],
   // Segment 0 ends 10:30 (pages 0–6), Segment 1 ends 25:25 (pages 7–13), Segment 2 to end (pages 14+)
   segments: [
     { start: 0, end: 630 },   // 0:00 – 10:30

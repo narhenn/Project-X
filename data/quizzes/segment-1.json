@@ -1,0 +1,32 @@
+[
+  {
+    "id": "s1-q1",
+    "question": "What is a buffer overflow?",
+    "options": ["A buffer that is too small", "When data written to a buffer exceeds its allocated size and overwrites adjacent memory", "A type of network attack", "An encryption method"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s1-q2",
+    "question": "Which of the following C functions is considered unsafe when used with untrusted input?",
+    "options": ["strncpy()", "strcpy()", "memcpy() with correct length", "snprintf()"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s1-q3",
+    "question": "What can an attacker potentially overwrite in a stack-based buffer overflow?",
+    "options": ["Only local variables", "Return address and local variables", "Only the heap", "Only global variables"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s1-q4",
+    "question": "What is ASLR (Address Space Layout Randomization)?",
+    "options": ["A type of buffer", "A defense that randomizes memory addresses to make exploits harder", "An attack technique", "A programming language"],
+    "correctIndex": 1
+  },
+  {
+    "id": "s1-q5",
+    "question": "Which practice helps prevent buffer overflows?",
+    "options": ["Using fixed-size buffers only", "Bounds checking and using safe functions (e.g. strncpy, snprintf)", "Ignoring input length", "Using larger buffers without validation"],
+    "correctIndex": 1
+  }
+]
