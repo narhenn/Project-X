@@ -50,3 +50,42 @@ export async function detectBurnout(studyData: any) {
   const response = await callGemini(prompt);
   return JSON.parse(response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
 }
+
+export async function generateSegmentQuizQuestions(segmentIndex: number, slides: string) {
+  const prompt = `You are a university quiz generator. Based on the following lecture slides for Segment ${segmentIndex + 1}, generate 5 multiple-choice questions that test understanding of the key concepts.
+
+LECTURE SLIDES:
+${slides}
+
+Return ONLY a valid JSON array with exactly this format, no other text:
+[
+  {
+    "id": "s${segmentIndex}-q1",
+    "question": "The question text",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctIndex": 0
+  }
+]
+
+Rules:
+- Generate exactly 5 questions
+- Each question must have exactly 4 options
+- correctIndex is 0-3 indicating the correct option
+- Questions must reference specific concepts from the slides
+- Mix difficulty: 2 easy, 2 medium, 1 hard
+- IDs must follow pattern s${segmentIndex}-q1 through s${segmentIndex}-q5`;
+
+  const response = await callGemini(prompt);
+  const parsed = JSON.parse(response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('Invalid quiz response from Gemini');
+  }
+
+  return parsed.map((q: any, i: number) => ({
+    id: q.id ?? `s${segmentIndex}-q${i + 1}`,
+    question: q.question ?? '',
+    options: Array.isArray(q.options) ? q.options.slice(0, 4) : ['A', 'B', 'C', 'D'],
+    correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < 4 ? q.correctIndex : 0,
+  }));
+}
