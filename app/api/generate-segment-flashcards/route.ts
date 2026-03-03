@@ -1,42 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSegmentFlashcards } from '@/lib/gemini-ai';
+import { getSegmentFlashcards } from '@/data/segmentFlashcards';
 import { logger } from '@/lib/logger';
 
-const log = logger.child('API:GenerateSegmentFlashcards');
+const log = logger.child('API:SegmentFlashcards');
 
-/**
- * POST /api/generate-segment-flashcards
- * Generate AI flashcards from the segment's slides document (review after quiz fail).
- * Body: { segmentIndex: number, segmentSlides: string, count?: number }
- * Returns: { flashcards: { front: string, back: string }[] }
- */
+declare global {
+  // eslint-disable-next-line no-var
+  var __flashcardCache: Map<string, { data: any; ts: number }> | undefined;
+}
+const cache = globalThis.__flashcardCache ?? (globalThis.__flashcardCache = new Map());
+const TTL_MS = 1000 * 60 * 60 * 24;
+
 export async function POST(request: NextRequest) {
+  let segmentIndex = 0;
   try {
     const body = await request.json();
-    const { segmentIndex, segmentSlides, count = 6 } = body;
+    segmentIndex = body.segmentIndex;
+    const slides = typeof body.segmentSlides === 'string' ? body.segmentSlides.trim() : '';
+    const count = typeof body.count === 'number' ? body.count : 8;
 
     if (typeof segmentIndex !== 'number' || segmentIndex < 0) {
       return NextResponse.json({ error: 'Invalid segmentIndex' }, { status: 400 });
     }
-    if (!segmentSlides || typeof segmentSlides !== 'string' || segmentSlides.trim().length === 0) {
-      return NextResponse.json({ error: 'Missing or empty segmentSlides' }, { status: 400 });
+
+    // Check cache first
+    const key = `fc-${segmentIndex}`;
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.ts < TTL_MS) {
+      log.info('Flashcard cache hit', { segmentIndex });
+      return NextResponse.json({ flashcards: cached.data, cached: true });
     }
 
-    log.info('Segment flashcards requested from slides', { segmentIndex });
+    // No slides — return hardcoded fallback
+    if (!slides.length) {
+      const fallback = getSegmentFlashcards(segmentIndex);
+      return NextResponse.json({ flashcards: fallback, fallback: true });
+    }
 
-    const flashcards = await generateSegmentFlashcards(
-      segmentIndex,
-      segmentSlides.trim(),
-      typeof count === 'number' && count > 0 ? Math.min(count, 10) : 6
-    );
-
-    return NextResponse.json({ flashcards });
+    // Generate with Gemini
+    log.info('Generating AI flashcards', { segmentIndex, count });
+    const flashcards = await generateSegmentFlashcards(segmentIndex, slides, count);
+    cache.set(key, { data: flashcards, ts: Date.now() });
+    return NextResponse.json({ flashcards, cached: false });
   } catch (error: any) {
-    const message = error?.message ?? 'Failed to generate flashcards';
-    log.error('Segment flashcards generation failed', { error: message });
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    log.error('Flashcard generation failed', { error: error?.message });
+    // Fallback to hardcoded on any failure
+    const fallback = getSegmentFlashcards(segmentIndex);
+    if (fallback.length > 0) {
+      log.info('Serving hardcoded fallback flashcards', { segmentIndex });
+      return NextResponse.json({ flashcards: fallback, fallback: true });
+    }
+    return NextResponse.json({ error: error?.message }, { status: 500 });
   }
 }

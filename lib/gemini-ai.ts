@@ -89,3 +89,35 @@ Rules:
     correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < 4 ? q.correctIndex : 0,
   }));
 }
+
+export async function generateSegmentFlashcards(segmentIndex: number, slides: string) {
+  const prompt = `You are a university tutor. Based on the following lecture slides for Segment ${segmentIndex + 1}, generate 8 flashcards that help students memorize and understand the key concepts.
+
+LECTURE SLIDES:
+${slides}
+
+Return ONLY a valid JSON array with exactly this format, no other text:
+[
+  { "front": "A concise question or prompt", "back": "A clear, complete answer" }
+]
+
+Rules:
+- Generate exactly 8 flashcards
+- Questions should test core concepts, definitions, and relationships
+- Answers should be concise but complete (1-2 sentences max)
+- Cover the most important topics from the slides
+- Mix difficulty: some definitional, some conceptual, some application-level
+- Reference specific terms and examples from the slides`;
+
+  const response = await callGemini(prompt);
+  const parsed = JSON.parse(response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('Invalid flashcard response from Gemini');
+  }
+
+  return parsed.map((fc: any) => ({
+    front: fc.front ?? '',
+    back: fc.back ?? '',
+  }));
+}

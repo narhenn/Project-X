@@ -50,6 +50,10 @@ export default function WatchPage() {
   const [segmentSlidesFromApi, setSegmentSlidesFromApi] = useState<string[] | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
 
+  // Track quiz fail counts per segment & peer tutoring dialog
+  const [segmentFailCounts, setSegmentFailCounts] = useState<Record<number, number>>({});
+  const [peerTutoringOpen, setPeerTutoringOpen] = useState(false);
+
   const inFlightRef = useRef<Record<string, Promise<QuizQuestion[]> | null>>({});
   const lastFailRef = useRef<Record<string, number>>({});
 
@@ -183,6 +187,13 @@ export default function WatchPage() {
   const handleQuizFail = useCallback(async () => {
     await progressService.recordQuizAttempt(userId, moduleId, quizSegmentIndex);
     await loadProgress();
+    setSegmentFailCounts(prev => {
+      const count = (prev[quizSegmentIndex] ?? 0) + 1;
+      if (count >= 3) {
+        setPeerTutoringOpen(true);
+      }
+      return { ...prev, [quizSegmentIndex]: count };
+    });
   }, [quizSegmentIndex, loadProgress]);
 
   const handleShowFlashcards = useCallback(async () => {
@@ -204,8 +215,8 @@ export default function WatchPage() {
             return;
           }
         }
-      } catch {
-        // fallback below
+      } catch (err) {
+        console.error('[Flashcards] AI generation failed, using fallback:', err);
       }
     }
     const cards = getSegmentFlashcards(quizSegmentIndex);
@@ -414,6 +425,40 @@ export default function WatchPage() {
         cards={flashcards}
         onClose={() => { setFlashcardOpen(false); setQuizOpen(true); }}
       />
+
+      {/* Peer Tutoring Recommendation Dialog — shown after 3 quiz fails on same segment */}
+      {peerTutoringOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-md mx-4 shadow-2xl text-center">
+            <div className="text-4xl mb-4">🤝</div>
+            <h2 className="text-xl font-bold text-white mb-3">
+              Peer Tutoring Recommended
+            </h2>
+            <p className="text-slate-300 text-sm mb-2">
+              You&apos;ve attempted this segment quiz 3 times. That&apos;s completely okay &mdash; some topics need a different perspective.
+            </p>
+            <p className="text-slate-400 text-sm mb-6">
+              We strongly recommend visiting <span className="text-blue-400 font-semibold">NTU Peer Tutoring</span> where fellow students can walk you through these concepts one-on-one.
+            </p>
+            <div className="space-y-3">
+              <a
+                href="https://ts.ntu.edu.sg/sites/intranet/dept/tlpd/ai/Pages/Peer-Tutoring.aspx"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition"
+              >
+                📚 Book Peer Tutoring
+              </a>
+              <button
+                onClick={() => setPeerTutoringOpen(false)}
+                className="block w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium rounded-xl transition"
+              >
+                I&apos;ll keep trying
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
