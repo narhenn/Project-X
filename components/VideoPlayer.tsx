@@ -31,6 +31,12 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const playerRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
+  // Defer YouTube render so Strict Mode’s mount→unmount→mount doesn’t leave the API with a dead iframe (null.src)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(t);
+  }, []);
   const lastSegmentEndFired = useRef<number>(-1);
   const lastTimeUpdate = useRef<number>(0);
   const checkInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -107,13 +113,15 @@ export function VideoPlayer({
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
-      <YouTube
-        videoId={videoId}
-        opts={YOUTUBE_OPTS}
-        onReady={onReady}
-        className="absolute inset-0"
-        iframeClassName="w-full h-full"
-      />
+      {mounted && (
+        <YouTube
+          videoId={videoId}
+          opts={YOUTUBE_OPTS}
+          onReady={onReady}
+          className="absolute inset-0"
+          iframeClassName="w-full h-full"
+        />
+      )}
       {paused && (
         <button
           type="button"
