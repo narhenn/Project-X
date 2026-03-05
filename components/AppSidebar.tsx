@@ -50,7 +50,7 @@ export function AppSidebar({ currentPath, onSignOut }: AppSidebarProps) {
             >
               {item.icon && <span className="text-base opacity-90">{item.icon}</span>}
               <span>{item.label}</span>
-              {item.badge != null && (
+              {'badge' in item && item.badge != null && (
                 <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs flex items-center justify-center font-medium shadow-sm">
                   {item.badge}
                 </span>

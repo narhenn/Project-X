@@ -1,23 +1,8 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { complete } from '@/lib/openai-ai';
 
 const log = logger.child('BurnoutAPI');
-
-async function callGemini(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1500, temperature: 0.7 },
-    }),
-  });
-  if (!response.ok) throw new Error(`Gemini error: ${response.status}`);
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-}
 
 export async function POST(request) {
   try {
@@ -110,7 +95,7 @@ Respond ONLY with valid JSON, no markdown backticks:
     let weeklyTip = 'Try the Pomodoro technique: 25 minutes focused study, 5 minutes break.';
 
     try {
-      const aiResponse = await callGemini(prompt);
+      const aiResponse = await complete(prompt);
       const cleaned = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const parsed = JSON.parse(cleaned);
       recommendation = parsed.recommendation || recommendation;

@@ -17,6 +17,8 @@ export function QuizModal({
   onPass,
   onFail,
   onShowFlashcards,
+  flashcardLoading = false,
+  flashcardError = null,
 }: {
   open: boolean;
   segmentIndex: number;
@@ -29,6 +31,8 @@ export function QuizModal({
   onPass: (score: number) => void;
   onFail: () => void;
   onShowFlashcards?: () => void;
+  flashcardLoading?: boolean;
+  flashcardError?: string | null;
 }) {
   const retryDisabled = cooldownUntil > 0 && Date.now() < cooldownUntil;
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -203,13 +207,21 @@ export function QuizModal({
             ) : (
               <>
                 <p className="mt-0.5 text-xs text-amber-400/90">Not quite. Retry the quiz or review with flashcards.</p>
+                {flashcardError && (
+                  <p className="mt-2 text-xs text-red-400">{flashcardError}</p>
+                )}
                 <div className="mt-3 flex gap-2">
                   <button type="button" onClick={handleRetry} className="flex-1 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-sm font-semibold text-white transition-colors">
                     Retry quiz
                   </button>
                   {onShowFlashcards && (
-                    <button type="button" onClick={onShowFlashcards} className="flex-1 py-1.5 rounded-xl bg-slate-600 hover:bg-slate-500 text-sm font-semibold text-white transition-colors border border-white/10">
-                      Show flashcards
+                    <button
+                      type="button"
+                      onClick={onShowFlashcards}
+                      disabled={flashcardLoading}
+                      className="flex-1 py-1.5 rounded-xl bg-slate-600 hover:bg-slate-500 text-sm font-semibold text-white transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {flashcardLoading ? 'Generating…' : 'Show flashcards'}
                     </button>
                   )}
                 </div>

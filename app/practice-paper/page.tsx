@@ -143,7 +143,7 @@ export default function PracticePaperPage() {
       setSelectedSubTopics(prev => prev.filter(t => !subTopics.includes(t)));
     } else {
       setSelectedSegments(prev => [...prev, idx]);
-      setSelectedSubTopics(prev => [...new Set([...prev, ...subTopics])]);
+      setSelectedSubTopics(prev => Array.from(new Set([...prev, ...subTopics])));
     }
   };
 

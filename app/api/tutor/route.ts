@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { complete as openAIComplete } from '@/lib/openai-ai';
 
 const log = logger.child('API:AITutor');
 
@@ -73,61 +74,15 @@ async function getStudentData(studentId = 'student_1'): Promise<Record<string, a
   return null;
 }
 
-/* ── callGemini ───────────────────────────────────────────────────────── */
+/* ── OpenAI (replaces Gemini) ──────────────────────────────────────────── */
 
-async function callGemini(prompt: string): Promise<string | null> {
-  const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(Boolean) as string[];
-
-  if (keys.length === 0) {
-    log.error('No GEMINI_API_KEY in environment');
+async function callTutorAI(prompt: string): Promise<string | null> {
+  try {
+    return await openAIComplete(prompt);
+  } catch (err: unknown) {
+    log.error('OpenAI exception', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
-
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
-    const apiKey = keys[attempt % keys.length];
-    // Same model as Pranati: gemini-2.5-flash
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-    try {
-      log.debug('Gemini attempt', { attempt: attempt + 1 });
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          // No maxOutputTokens constraint — let Gemini give full response like Pranati's
-        }),
-      });
-
-      if (res.status === 429) {
-        log.warn('Rate limited', { attempt: attempt + 1 });
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        log.error('Gemini error', { status: res.status, body: errText.slice(0, 200) });
-        continue;
-      }
-
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-      if (text) {
-        log.info('Gemini OK', { length: text.length });
-        return text;
-      }
-
-      log.warn('Empty Gemini response');
-    } catch (err: any) {
-      log.error('Gemini exception', { error: err.message });
-      continue;
-    }
-  }
-
-  return null;
 }
 
 /* ── POST /api/tutor — exact mirror of Pranati's get_ai_tutor_advice ── */
@@ -221,8 +176,8 @@ Task:
 4. Make guidance actionable, data-driven, and concise.
 `;
 
-    // ── Step 4: Call Gemini (same model as Pranati: gemini-2.5-flash) ──
-    const response = await callGemini(prompt);
+    // ── Step 4: Call OpenAI ──
+    const response = await callTutorAI(prompt);
 
     if (response) {
       return NextResponse.json({ answer: response });
@@ -230,7 +185,7 @@ Task:
 
     // Fallback if Gemini is completely down
     return NextResponse.json({
-      answer: `Tutor is resting 😴 Gemini is unavailable right now. Quick summary from your data: your weakest topics are ${Object.entries(confidence).sort((a, b) => (a[1] as number) - (b[1] as number)).slice(0, 3).map(([k, v]) => `${topics[k]?.name || k} (${Math.round((v as number) * 100)}%)`).join(', ')}. Focus on those first!`,
+      answer: `Tutor is resting 😴 AI is unavailable right now. Quick summary from your data: your weakest topics are ${Object.entries(confidence).sort((a, b) => (a[1] as number) - (b[1] as number)).slice(0, 3).map(([k, v]) => `${topics[k]?.name || k} (${Math.round((v as number) * 100)}%)`).join(', ')}. Focus on those first!`,
     });
 
   } catch (error: any) {

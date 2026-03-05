@@ -124,34 +124,13 @@ class LearningStateAnalyzer {
   }
 }
 
-async function callGemini(prompt: string) {
-  const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(Boolean);
-
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
-    const apiKey = keys[attempt % keys.length];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    log.debug('Calling Gemini', { attempt: attempt + 1, keyIndex: attempt % keys.length });
-
-    try {
-      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 3000, temperature: 0.7 } }) });
-
-      if (res.status === 429) {
-        log.info('Rate limited, switching key', { attempt });
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
-      if (!res.ok) {
-        log.error('Gemini non-429 error', { status: res.status });
-        continue;
-      }
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } catch (e: any) {
-      log.error('Gemini fetch error', { error: e.message });
-      continue;
-    }
+async function callAI(prompt: string): Promise<string | null> {
+  try {
+    return await import('@/lib/openai-ai').then((m) => m.complete(prompt, { maxTokens: 3000 }));
+  } catch (e: unknown) {
+    log.error('OpenAI fetch error', { error: e instanceof Error ? e.message : String(e) });
+    return null;
   }
-  return null; // Return null instead of throwing — we'll use fallback
 }
 
 export async function POST(request: Request) {
@@ -218,7 +197,7 @@ Respond ONLY with valid JSON (no backticks):
   "velocityAdvice": "2-3 sentences about learning speed"
 }`;
 
-    const aiResponse = await callGemini(prompt);
+    const aiResponse = await callAI(prompt);
 
     if (aiResponse) {
       try {
@@ -229,7 +208,7 @@ Respond ONLY with valid JSON (no backticks):
         log.error('Failed to parse AI response', { error: e.message });
       }
     } else {
-      log.info('Gemini unavailable, using intelligent fallback');
+      log.info('OpenAI unavailable, using intelligent fallback');
     }
 
     // Intelligent fallback — computed from real data, not hardcoded

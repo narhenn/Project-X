@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-import { generateSegmentQuizQuestions } from '@/lib/gemini-ai';
+import { generateSegmentQuizQuestions } from '@/lib/openai-ai';
 import { logger } from '@/lib/logger';
 
 const log = logger.child('API:GenerateQuiz');

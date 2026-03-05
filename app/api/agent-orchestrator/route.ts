@@ -1,22 +1,15 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { complete } from '@/lib/openai-ai';
 
 const log = logger.child('AgentOrchestrator');
 
-async function callGemini(prompt: string) {
-  const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(Boolean);
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
-    const apiKey = keys[attempt % keys.length];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    try {
-      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0.7 } }) });
-      if (res.status === 429) { await new Promise(r => setTimeout(r, 1500)); continue; }
-      if (!res.ok) continue;
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } catch { continue; }
+async function callAI(prompt: string): Promise<string | null> {
+  try {
+    return await complete(prompt, { maxTokens: 2000 });
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function POST(request: Request) {
@@ -99,7 +92,7 @@ Generate a concise action plan. Respond ONLY with valid JSON (no backticks):
   "planSummary": "2 sentence summary"
 }`;
     let planResult: any = null;
-    const planResponse = await callGemini(planPrompt);
+    const planResponse = await callAI(planPrompt);
     if (planResponse) {
       try { planResult = JSON.parse(planResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()); } catch {}
     }
@@ -130,7 +123,7 @@ Careless areas: ${carelessTopics.join(', ') || 'none'}
 Plan urgency: ${planResult.urgency}
 
 Write a 3-sentence personalized message. Be specific, data-driven, and encouraging. Do NOT use generic platitudes.`;
-    let tutorMessage = await callGemini(tutorPrompt);
+    let tutorMessage = await callAI(tutorPrompt);
     if (!tutorMessage) {
       tutorMessage = `${studentData.name}, your scores show a ${trend} trend with a predicted next score of ${predicted}%. Focus your energy on ${genuineWeaknesses[0] || 'your weak areas'} — that's where the biggest gains are. You've got this!`;
     }

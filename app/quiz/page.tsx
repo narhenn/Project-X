@@ -143,7 +143,7 @@ export default function QuizPage() {
 
     // Check if cognitive question was answered wrong
     if (q.type === 'iq') {
-      const correctOption = q.options.find(o => o.correct);
+      const correctOption = q.options.find((o: { value: string; label: string; correct?: boolean }) => o.correct);
       if (correctOption && selected !== correctOption.value) {
         setWasWrong(true);
         const userLabel = q.options.find(o => o.value === selected)?.label || selected;

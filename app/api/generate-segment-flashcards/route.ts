@@ -1,56 +1,75 @@
+import fs from 'fs';
+import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-import { generateSegmentFlashcards } from '@/lib/gemini-ai';
-import { getSegmentFlashcards } from '@/data/segmentFlashcards';
+import { generateSegmentFlashcards, generateFlashcardsForSegmentByTopic } from '@/lib/openai-ai';
 import { logger } from '@/lib/logger';
 
-const log = logger.child('API:SegmentFlashcards');
+const log = logger.child('API:GenerateSegmentFlashcards');
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __flashcardCache: Map<string, { data: any; ts: number }> | undefined;
+const CACHE_FILE = path.join(process.cwd(), '.cache', 'flashcards.json');
+
+function readCache(): Record<string, Array<{ front: string; back: string }>> {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return {};
+    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
 }
-const cache = globalThis.__flashcardCache ?? (globalThis.__flashcardCache = new Map());
-const TTL_MS = 1000 * 60 * 60 * 24;
 
+function writeCache(data: Record<string, Array<{ front: string; back: string }>>) {
+  fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
+}
+
+/**
+ * POST /api/generate-segment-flashcards
+ * Generate AI flashcards (from slides when available, otherwise from topic). No hardcoded fallbacks.
+ * Body: { segmentIndex: number, segmentSlides?: string, topic?: string, count?: number }
+ * Returns: { flashcards: { front: string, back: string }[] }
+ */
 export async function POST(request: NextRequest) {
   let segmentIndex = 0;
   try {
     const body = await request.json();
     segmentIndex = body.segmentIndex;
     const slides = typeof body.segmentSlides === 'string' ? body.segmentSlides.trim() : '';
-    const count = typeof body.count === 'number' ? body.count : 8;
+    const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
+    const count = typeof body.count === 'number' && body.count > 0 ? Math.min(body.count, 10) : 6;
 
-    if (typeof segmentIndex !== 'number' || segmentIndex < 0) {
+    if (typeof segmentIndex !== 'number' || segmentIndex < 0)
       return NextResponse.json({ error: 'Invalid segmentIndex' }, { status: 400 });
+
+    const cache = readCache();
+    const cacheKey = slides.length ? `segment-${segmentIndex}` : `segment-${segmentIndex}-topic-${topic || 'unknown'}`;
+
+    if (cache[cacheKey]) {
+      log.info('Returning cached flashcards', { segmentIndex });
+      return NextResponse.json({ flashcards: cache[cacheKey] });
     }
 
-    // Check cache first
-    const key = `fc-${segmentIndex}`;
-    const cached = cache.get(key);
-    if (cached && Date.now() - cached.ts < TTL_MS) {
-      log.info('Flashcard cache hit', { segmentIndex });
-      return NextResponse.json({ flashcards: cached.data, cached: true });
+    let flashcards: Array<{ front: string; back: string }>;
+
+    if (slides.length > 0) {
+      log.info('Segment flashcards requested from slides', { segmentIndex });
+      flashcards = await generateSegmentFlashcards(segmentIndex, slides, count);
+    } else if (topic.length > 0) {
+      log.info('Segment flashcards requested from topic (no slides)', { segmentIndex, topic });
+      flashcards = await generateFlashcardsForSegmentByTopic(segmentIndex, topic, count);
+    } else {
+      return NextResponse.json(
+        { error: 'Provide segmentSlides or topic to generate flashcards.' },
+        { status: 400 }
+      );
     }
 
-    // No slides — return hardcoded fallback
-    if (!slides.length) {
-      const fallback = getSegmentFlashcards(segmentIndex);
-      return NextResponse.json({ flashcards: fallback, fallback: true });
-    }
+    cache[cacheKey] = flashcards;
+    writeCache(cache);
 
-    // Generate with Gemini
-    log.info('Generating AI flashcards', { segmentIndex, count });
-    const flashcards = await generateSegmentFlashcards(segmentIndex, slides, count);
-    cache.set(key, { data: flashcards, ts: Date.now() });
-    return NextResponse.json({ flashcards, cached: false });
-  } catch (error: any) {
-    log.error('Flashcard generation failed', { error: error?.message });
-    // Fallback to hardcoded on any failure
-    const fallback = getSegmentFlashcards(segmentIndex);
-    if (fallback.length > 0) {
-      log.info('Serving hardcoded fallback flashcards', { segmentIndex });
-      return NextResponse.json({ flashcards: fallback, fallback: true });
-    }
-    return NextResponse.json({ error: error?.message }, { status: 500 });
+    return NextResponse.json({ flashcards });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to generate flashcards';
+    log.error('Segment flashcards generation failed', { error: message });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

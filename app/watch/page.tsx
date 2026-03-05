@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { VideoPlayer } from '@/components/VideoPlayer';
@@ -8,12 +8,10 @@ import { QuizModal } from '@/components/QuizModal';
 import { ChatbotModal } from '@/components/ChatbotModal';
 import { FlashcardModal } from '@/components/FlashcardModal';
 import { demoModule } from '@/data/demoModule';
-import { getSegmentFlashcards } from '@/data/segmentFlashcards';
 import { progressService } from '@/lib/progress';
-import { aiHelpService } from '@/lib/ai-help';
 import { auth, onAuthStateChanged } from '@/lib/firebase';
-import type { Segment, ModuleProgress, QuizQuestion } from '@/types/learning';
 import type { Flashcard } from '@/lib/ai-help';
+import type { Segment, ModuleProgress, QuizQuestion } from '@/types/learning';
 
 const DEMO_USER = 'user-1';
 const DEFAULT_MODULE_ID = 'demo-1';
@@ -27,7 +25,7 @@ function buildSegments(duration: number, count: number): Segment[] {
   }));
 }
 
-export default function WatchPage() {
+function WatchPageContent() {
   const searchParams = useSearchParams();
   const moduleId = searchParams.get('moduleId') || DEFAULT_MODULE_ID;
   /** Topic for this video — from the link that opened this page. Used for heading and Firebase (moduleProgress, segmentQuizScores). */
@@ -49,8 +47,10 @@ export default function WatchPage() {
   /** Segment slides from PDF (content/slides.pdf) or fallback to demoModule.segmentSlides */
   const [segmentSlidesFromApi, setSegmentSlidesFromApi] = useState<string[] | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
-
-  // Track quiz fail counts per segment & peer tutoring dialog
+  const [flashcardLoading, setFlashcardLoading] = useState(false);
+  const [flashcardError, setFlashcardError] = useState<string | null>(null);
+  /** When true, closing the flashcard modal reopens the quiz (used when opened from quiz fail). */
+  const [flashcardReopenQuizOnClose, setFlashcardReopenQuizOnClose] = useState(true);
   const [segmentFailCounts, setSegmentFailCounts] = useState<Record<number, number>>({});
   const [peerTutoringOpen, setPeerTutoringOpen] = useState(false);
 
@@ -187,44 +187,44 @@ export default function WatchPage() {
   const handleQuizFail = useCallback(async () => {
     await progressService.recordQuizAttempt(userId, moduleId, quizSegmentIndex);
     await loadProgress();
-    setSegmentFailCounts(prev => {
+    setSegmentFailCounts((prev) => {
       const count = (prev[quizSegmentIndex] ?? 0) + 1;
-      if (count >= 3) {
-        setPeerTutoringOpen(true);
-      }
+      if (count >= 3) setPeerTutoringOpen(true);
       return { ...prev, [quizSegmentIndex]: count };
     });
   }, [quizSegmentIndex, loadProgress]);
 
   const handleShowFlashcards = useCallback(async () => {
-    const segmentSlides = effectiveSegmentSlides[quizSegmentIndex];
-    if (segmentSlides) {
-      try {
-        const res = await fetch('/api/generate-segment-flashcards', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ segmentIndex: quizSegmentIndex, segmentSlides, count: 6 }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.flashcards) && data.flashcards.length > 0) {
-            setFlashcards(data.flashcards);
-            setQuizOpen(false);
-            await progressService.recordFlashcardUsed(userId, moduleId, quizSegmentIndex);
-            setFlashcardOpen(true);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('[Flashcards] AI generation failed, using fallback:', err);
+    const segmentSlides = effectiveSegmentSlides[quizSegmentIndex] ?? '';
+    setFlashcardError(null);
+    setFlashcardLoading(true);
+    try {
+      const res = await fetch('/api/generate-segment-flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          segmentIndex: quizSegmentIndex,
+          segmentSlides: segmentSlides.trim() || undefined,
+          topic: pageTopic || undefined,
+          count: 6,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.flashcards) && data.flashcards.length > 0) {
+        setFlashcards(data.flashcards);
+        setFlashcardReopenQuizOnClose(true);
+        setQuizOpen(false);
+        await progressService.recordFlashcardUsed(userId, moduleId, quizSegmentIndex);
+        setFlashcardOpen(true);
+      } else {
+        setFlashcardError(typeof data.error === 'string' ? data.error : 'Failed to generate flashcards. Try again.');
       }
+    } catch {
+      setFlashcardError('Failed to generate flashcards. Check your connection and try again.');
+    } finally {
+      setFlashcardLoading(false);
     }
-    const cards = getSegmentFlashcards(quizSegmentIndex);
-    setFlashcards(cards.length > 0 ? cards : await aiHelpService.getFlashcards(quizSegmentIndex));
-    setQuizOpen(false);
-    await progressService.recordFlashcardUsed(userId, moduleId, quizSegmentIndex);
-    setFlashcardOpen(true);
-  }, [quizSegmentIndex, effectiveSegmentSlides, userId, moduleId]);
+  }, [quizSegmentIndex, effectiveSegmentSlides, pageTopic, userId, moduleId]);
 
   const handleLostClick = useCallback(() => {
     setChatbotOpen(true);
@@ -409,6 +409,8 @@ export default function WatchPage() {
         onPass={handleQuizPass}
         onFail={handleQuizFail}
         onShowFlashcards={handleShowFlashcards}
+        flashcardLoading={flashcardLoading}
+        flashcardError={flashcardError}
       />
       <ChatbotModal
         open={chatbotOpen}
@@ -423,33 +425,27 @@ export default function WatchPage() {
         key={`flashcard-${quizSegmentIndex}`}
         open={flashcardOpen}
         cards={flashcards}
-        onClose={() => { setFlashcardOpen(false); setQuizOpen(true); }}
+        onClose={() => {
+          setFlashcardOpen(false);
+          if (flashcardReopenQuizOnClose) setQuizOpen(true);
+        }}
       />
 
-      {/* Peer Tutoring Recommendation Dialog — shown after 3 quiz fails on same segment */}
+      {/* Peer Tutoring Recommendation — shown after 3 quiz fails on same segment */}
       {peerTutoringOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-md mx-4 shadow-2xl text-center">
             <div className="text-4xl mb-4">🤝</div>
-            <h2 className="text-xl font-bold text-white mb-3">
-              Peer Tutoring Recommended
-            </h2>
+            <h2 className="text-xl font-bold text-white mb-3">Peer Tutoring Recommended</h2>
             <p className="text-slate-300 text-sm mb-2">
-              You&apos;ve attempted this segment quiz 3 times. That&apos;s completely okay &mdash; some topics need a different perspective.
+              You&apos;ve attempted this segment quiz 3 times. That&apos;s completely okay — some topics need a different perspective.
             </p>
             <p className="text-slate-400 text-sm mb-6">
-              We strongly recommend visiting <span className="text-blue-400 font-semibold">NTU Peer Tutoring</span> where fellow students can walk you through these concepts one-on-one.
+              We recommend visiting <span className="text-blue-400 font-semibold">NTU Peer Tutoring</span> where fellow students can walk you through these concepts one-on-one.
             </p>
             <div className="space-y-3">
-              <a
-                href="https://ts.ntu.edu.sg/sites/intranet/dept/tlpd/ai/Pages/Peer-Tutoring.aspx"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition"
-              >
-                📚 Book Peer Tutoring
-              </a>
               <button
+                type="button"
                 onClick={() => setPeerTutoringOpen(false)}
                 className="block w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium rounded-xl transition"
               >
@@ -460,5 +456,13 @@ export default function WatchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function WatchPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400">Loading...</div>}>
+      <WatchPageContent />
+    </Suspense>
   );
 }

@@ -1,22 +1,15 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { complete } from '@/lib/openai-ai';
 
 const log = logger.child('FlashcardGenerator');
 
-async function callGemini(prompt: string) {
-  const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(Boolean);
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
-    const apiKey = keys[attempt % keys.length];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    try {
-      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0.7 } }) });
-      if (res.status === 429) { await new Promise(r => setTimeout(r, 1500)); continue; }
-      if (!res.ok) continue;
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } catch { continue; }
+async function callAI(prompt: string): Promise<string | null> {
+  try {
+    return await complete(prompt, { maxTokens: 2000 });
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function POST(request: Request) {
@@ -42,7 +35,7 @@ Respond ONLY with valid JSON (no backticks):
   "studyTip": "One sentence tip for mastering this topic"
 }`;
 
-    const aiResponse = await callGemini(prompt);
+    const aiResponse = await callAI(prompt);
     let result;
     if (aiResponse) {
       try { result = JSON.parse(aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()); } catch {}

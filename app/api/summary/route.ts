@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateVideoSummary } from '@/lib/gemini-ai';
+import { generateSummary } from '@/lib/openai-ai';
 import { logger } from '@/lib/logger';
 
 const log = logger.child('API:Summary');
@@ -21,11 +21,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const summary = await generateVideoSummary(
+    const summary = await generateSummary(
       topic,
       segmentTitle,
-      segmentContent || '',
-      timestamp || '0:00'
+      segmentContent || ''
     );
 
     return NextResponse.json({ summary });

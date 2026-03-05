@@ -4,8 +4,10 @@ import { logger } from '@/lib/logger';
 // ─────────────────────────────────────────────────────────────────────────────
 // Practice Paper Generator API
 // POST /api/practice-paper
-// Generates full mock exam papers (MCQ + short answer) using Gemini AI
+// Generates full mock exam papers (MCQ + short answer) using OpenAI
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { complete as openAIComplete } from '@/lib/openai-ai';
 
 const log = logger.child('API:PracticePaper');
 
@@ -64,63 +66,11 @@ interface GenerateRequest {
   shortAnswerCount?: number;
 }
 
-/* ── Gemini Client (OOP) ─────────────────────────────────────────────────── */
-
-class GeminiClient {
-  private keys: string[];
-  private model = 'gemini-2.0-flash';
-
-  constructor() {
-    this.keys = [
-      process.env.GEMINI_API_KEY,
-      process.env.GEMINI_API_KEY_2,
-    ].filter(Boolean) as string[];
-
-    if (this.keys.length === 0) {
-      log.error('No Gemini API keys configured');
-      throw new Error('GEMINI_API_KEY not configured');
-    }
-    log.debug('GeminiClient initialized', { keyCount: this.keys.length });
-  }
-
-  async generate(prompt: string, maxTokens = 4096): Promise<string | null> {
-    for (let attempt = 0; attempt < this.keys.length * 2; attempt++) {
-      const apiKey = this.keys[attempt % this.keys.length];
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${apiKey}`;
-
-      try {
-        log.debug('Gemini request attempt', { attempt: attempt + 1, model: this.model });
-
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.8 },
-          }),
-        });
-
-        if (res.status === 429) {
-          log.warn('Gemini rate limited, retrying', { attempt: attempt + 1 });
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        }
-
-        if (!res.ok) {
-          log.warn('Gemini non-OK response', { status: res.status, attempt: attempt + 1 });
-          continue;
-        }
-
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        log.debug('Gemini response received', { length: text.length });
-        return text;
-      } catch (err: any) {
-        log.warn('Gemini request failed', { error: err.message, attempt: attempt + 1 });
-        continue;
-      }
-    }
-    log.error('All Gemini attempts exhausted');
+async function generateWithOpenAI(prompt: string, maxTokens = 4096): Promise<string | null> {
+  try {
+    return await openAIComplete(prompt, { maxTokens });
+  } catch (err: unknown) {
+    log.warn('OpenAI request failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }
@@ -128,11 +78,6 @@ class GeminiClient {
 /* ── Paper Generator (OOP) ───────────────────────────────────────────────── */
 
 class PaperGenerator {
-  private gemini: GeminiClient;
-
-  constructor() {
-    this.gemini = new GeminiClient();
-  }
 
   async generatePaper(req: GenerateRequest): Promise<PracticePaper> {
     const mcqCount = req.mcqCount ?? 10;
@@ -179,9 +124,9 @@ class PaperGenerator {
       ],
       generatedAt: new Date().toISOString(),
       meta: {
-        model: 'gemini-2.0-flash',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         questionsGenerated: mcqs.length + shortAnswers.length,
-        topicsCovered: [...new Set([...mcqs.map(q => q.topic), ...shortAnswers.map(q => q.topic)])],
+        topicsCovered: Array.from(new Set([...mcqs.map(q => q.topic), ...shortAnswers.map(q => q.topic)])),
       },
     };
 
@@ -239,7 +184,7 @@ Respond ONLY with valid JSON array (no markdown, no backticks, no preamble):
 ]`;
 
     log.debug('Generating MCQs', { count, difficulty });
-    const raw = await this.gemini.generate(prompt, 4096);
+    const raw = await generateWithOpenAI(prompt, 4096);
 
     if (!raw) {
       log.warn('MCQ generation returned null, using fallback');
@@ -302,7 +247,7 @@ Respond ONLY with valid JSON array (no markdown, no backticks, no preamble):
 ]`;
 
     log.debug('Generating short answers', { count, difficulty });
-    const raw = await this.gemini.generate(prompt, 3000);
+    const raw = await generateWithOpenAI(prompt, 3000);
 
     if (!raw) {
       log.warn('Short answer generation returned null, using fallback');
@@ -333,7 +278,7 @@ Respond ONLY with valid JSON array (no markdown, no backticks, no preamble):
     }
   }
 
-  /* ── Fallback generators (when Gemini fails/rate-limited) ────────────── */
+  /* ── Fallback generators (when OpenAI fails/rate-limited) ────────────── */
 
   private fallbackMCQs(topics: string[], count: number): MCQQuestion[] {
     log.info('Using fallback MCQs', { count });
@@ -420,7 +365,7 @@ export async function POST(request: NextRequest) {
 
     const isConfig = typeof message === 'string' && (
       message.includes('not configured') ||
-      message.includes('GEMINI') ||
+      message.includes('OPENAI') ||
       message.includes('API_KEY')
     );
 

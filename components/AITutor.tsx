@@ -75,7 +75,7 @@ function inlineFormat(text: string): React.ReactNode {
 
   while (remaining.length > 0) {
     // Bold: **text**
-    const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/s);
+    const boldMatch = remaining.match(/^([\s\S]*?)\*\*([\s\S]+?)\*\*([\s\S]*)/);
     if (boldMatch) {
       if (boldMatch[1]) parts.push(<span key={key++}>{boldMatch[1]}</span>);
       parts.push(<strong key={key++} className="text-white font-bold">{boldMatch[2]}</strong>);
@@ -84,7 +84,7 @@ function inlineFormat(text: string): React.ReactNode {
     }
 
     // Italic: *text*
-    const italicMatch = remaining.match(/^(.*?)\*(.+?)\*(.*)/s);
+    const italicMatch = remaining.match(/^([\s\S]*?)\*([\s\S]+?)\*([\s\S]*)/);
     if (italicMatch) {
       if (italicMatch[1]) parts.push(<span key={key++}>{italicMatch[1]}</span>);
       parts.push(<em key={key++} className="text-blue-300">{italicMatch[2]}</em>);
@@ -93,7 +93,7 @@ function inlineFormat(text: string): React.ReactNode {
     }
 
     // Code: `text`
-    const codeMatch = remaining.match(/^(.*?)`(.+?)`(.*)/s);
+    const codeMatch = remaining.match(/^([\s\S]*?)`([\s\S]+?)`([\s\S]*)/);
     if (codeMatch) {
       if (codeMatch[1]) parts.push(<span key={key++}>{codeMatch[1]}</span>);
       parts.push(<code key={key++} className="bg-white/10 text-amber-300 px-1.5 py-0.5 rounded text-xs">{codeMatch[2]}</code>);

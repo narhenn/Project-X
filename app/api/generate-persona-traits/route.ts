@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generatePersonaFromProfile } from '@/lib/gemini-ai';
+import { generatePersonaFromProfile } from '@/lib/openai-ai';
 
 /**
  * POST /api/generate-persona-traits
