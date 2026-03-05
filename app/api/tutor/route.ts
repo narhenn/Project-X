@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
 import { logger } from '@/lib/logger';
 import { complete as openAIComplete } from '@/lib/openai-ai';
 
 const log = logger.child('API:AITutor');
+
+function getOpenAI(): OpenAI {
+  const key = process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_2;
+  if (!key) throw new Error('OpenAI is not configured');
+  return new OpenAI({ apiKey: key });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guardian AI Tutor — /api/tutor
@@ -89,12 +96,14 @@ async function callTutorAI(prompt: string): Promise<string | null> {
 
 export async function POST(request: Request) {
   try {
-    const { question } = await request.json();
-    if (!question) {
-      return NextResponse.json({ answer: 'Please ask a question!' }, { status: 400 });
+    const { question, image } = await request.json() as { question?: string; image?: string };
+    const hasImage = typeof image === 'string' && image.startsWith('data:image');
+    if (!question && !hasImage) {
+      return NextResponse.json({ answer: 'Please ask a question or attach an image!' }, { status: 400 });
     }
+    const questionText = question || 'The student shared an image. Extract any text, doubt, or question from the image and answer it.';
 
-    log.info('Tutor query', { question: question.slice(0, 80) });
+    log.info('Tutor query', { question: questionText.slice(0, 80), hasImage });
 
     // ── Step 1: get_student_data (same as Pranati) ──
     const studentData = await getStudentData('student_1');
@@ -167,7 +176,7 @@ Quiz score history: ${JSON.stringify(historyScores)}
 Predicted next score: ${pred}, Trend: ${status}
 Recommended sequence of topics: ${JSON.stringify(recommendedSeq)}
 
-Student question: ${question}
+Student question: ${questionText}${hasImage ? ' (The student attached an image — read it and address any doubt or question shown.)' : ''}
 
 Task:
 1. Ask 2-3 personalized questions, prioritizing weakest topics first.
@@ -176,8 +185,34 @@ Task:
 4. Make guidance actionable, data-driven, and concise.
 `;
 
-    // ── Step 4: Call OpenAI ──
-    const response = await callTutorAI(prompt);
+    // ── Step 4: Call OpenAI (vision when image attached) ──
+    let response: string | null = null;
+    if (hasImage && image) {
+      try {
+        const openai = getOpenAI();
+        const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+        const completion = await openai.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                { type: 'image_url', image_url: { url: image } },
+              ],
+            },
+          ],
+          max_tokens: 1024,
+          temperature: 0.7,
+        });
+        response = completion.choices[0]?.message?.content?.trim() ?? null;
+      } catch (err: unknown) {
+        log.error('OpenAI vision exception', { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    if (!response) {
+      response = await callTutorAI(prompt);
+    }
 
     if (response) {
       return NextResponse.json({ answer: response });

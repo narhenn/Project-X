@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-type Message = { role: 'user' | 'ai'; text: string };
+type Message = { role: 'user' | 'ai'; text: string; image?: string };
 type ChatSize = 'compact' | 'expanded' | 'fullscreen';
 
 const SIZE_STYLES: Record<ChatSize, string> = {
@@ -119,7 +119,9 @@ export default function AITutor() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -127,10 +129,14 @@ export default function AITutor() {
 
   const sendMessage = useCallback(async (messageText?: string) => {
     const text = (messageText || input).trim();
-    if (!text || loading) return;
+    if ((!text && !attachedImage) || loading) return;
+    const questionToSend = text || 'What is the doubt or question in this image? Please explain or answer it.';
+    const imageToSend = attachedImage ?? undefined;
     setInput('');
+    setAttachedImage(null);
 
-    const userMsg: Message = { role: 'user', text };
+    const displayText = text ? text : '(Image: explain or answer the doubt shown)';
+    const userMsg: Message = { role: 'user', text: displayText, image: imageToSend };
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
 
@@ -138,7 +144,7 @@ export default function AITutor() {
       const res = await fetch('/api/tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: questionToSend, image: imageToSend }),
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'ai', text: data.answer || 'Sorry, couldn\'t process that. Try again!' }]);
@@ -146,7 +152,7 @@ export default function AITutor() {
       setMessages(prev => [...prev, { role: 'ai', text: 'Connection issue — please try again.' }]);
     }
     setLoading(false);
-  }, [input, loading]);
+  }, [input, loading, attachedImage]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -216,6 +222,9 @@ export default function AITutor() {
                 : 'bg-white/10 text-slate-200 rounded-bl-md'
             }`}>
               {m.role === 'ai' && <span className="text-xs text-blue-400 font-bold block mb-1">🛡️ Guardian AI</span>}
+              {m.role === 'user' && m.image && (
+                <img src={m.image} alt="Attached" className="mb-2 max-h-32 rounded-lg object-contain border border-white/20" />
+              )}
               {m.role === 'ai' ? renderMarkdown(m.text) : m.text}
             </div>
           </div>
@@ -248,12 +257,35 @@ export default function AITutor() {
 
       {/* Input */}
       <div className="p-3 border-t border-white/10 shrink-0">
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" aria-hidden
+          onChange={e => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => setAttachedImage(reader.result as string);
+            reader.readAsDataURL(file);
+            e.target.value = '';
+          }}
+        />
+        {attachedImage && (
+          <div className="mb-2 flex items-center gap-2">
+            <img src={attachedImage} alt="Attached" className="h-12 w-12 rounded-lg object-cover border border-white/20" />
+            <span className="text-xs text-slate-400">Image attached — extract doubt / answer</span>
+            <button type="button" onClick={() => setAttachedImage(null)} className="ml-auto text-slate-400 hover:text-white p-1 rounded" aria-label="Remove image">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        )}
         <div className="flex gap-2">
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={loading}
+            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-50 shrink-0" title="Attach image (screenshot, handwritten doubt)">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+          </button>
           <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
-            placeholder="Ask anything about your studies..."
+            placeholder="Ask anything... or attach an image of your doubt"
             className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${isFs ? 'text-base py-3' : ''}`}
             disabled={loading} />
-          <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
+          <button onClick={() => sendMessage()} disabled={(!input.trim() && !attachedImage) || loading}
             className={`bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/30 text-white px-4 py-2.5 rounded-xl transition-all text-sm font-semibold ${isFs ? 'px-6 text-base' : ''}`}>
             Send
           </button>

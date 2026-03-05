@@ -7,9 +7,10 @@ const log = logger.child('API:Chat');
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, systemInstruction } = body as {
+    const { messages, systemInstruction, image } = body as {
       messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
       systemInstruction?: string;
+      image?: string;
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -24,13 +25,26 @@ export async function POST(request: NextRequest) {
 
     const openai = new OpenAI({ apiKey });
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const hasImage = typeof image === 'string' && image.startsWith('data:image');
 
     const openAIMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
     if (systemInstruction) {
       openAIMessages.push({ role: 'system', content: systemInstruction });
     }
-    for (const m of messages) {
-      if (m.role === 'user' || m.role === 'assistant') {
+    const lastIdx = messages.length - 1;
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.role !== 'user' && m.role !== 'assistant') continue;
+      const isLastUserWithImage = hasImage && i === lastIdx && m.role === 'user';
+      if (isLastUserWithImage && image) {
+        openAIMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image_url', image_url: { url: image } },
+          ],
+        });
+      } else {
         openAIMessages.push({ role: m.role, content: m.content });
       }
     }
