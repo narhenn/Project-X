@@ -72,6 +72,51 @@ export async function generateSummary(topic: string, segmentTitle: string, segme
   return callOpenAI(prompt);
 }
 
+export interface QuizMistake {
+  question: string;
+  chosenOption: string;
+  correctOption: string;
+}
+
+export interface SegmentTakeaways {
+  bullets: string[];
+  oneThing: string;
+  /** Short "mistakes to note" points when the student got some quiz questions wrong. */
+  mistakesToNote?: string[];
+}
+
+/** 2–3 bullet points + one thing to remember after completing a segment (for "What you learned" modal). Optional mistakes → add "take note" points. */
+export async function generateSegmentTakeaways(
+  topic: string,
+  segmentIndex: number,
+  segmentSlidesSnippet?: string,
+  mistakes?: QuizMistake[]
+): Promise<SegmentTakeaways> {
+  const context = segmentSlidesSnippet
+    ? `Relevant content:\n${segmentSlidesSnippet.slice(0, 2500)}`
+    : `Topic: ${topic}, Segment ${segmentIndex + 1}.`;
+  const mistakesBlock =
+    mistakes && mistakes.length > 0
+      ? `\nThe student got these questions wrong — include a "mistakes to note" section so they remember what to fix:\n${mistakes.map((m) => `- Q: ${m.question} | They chose: ${m.chosenOption} | Correct: ${m.correctOption}`).join('\n')}`
+      : '';
+
+  const prompt = `A student just completed segment ${segmentIndex + 1} of a course on "${topic}". ${context}.${mistakesBlock}
+
+Give a short "What you learned" recap. Return ONLY valid JSON with exactly this shape (no markdown, no extra text):
+{"bullets":["bullet 1","bullet 2","bullet 3"],"oneThing":"One key takeaway to remember.","mistakesToNote":["point 1","point 2"]}
+- bullets: 2 or 3 short bullet points (one line each) summarizing what was covered.
+- oneThing: One sentence that captures the single most important thing to remember from this segment.
+${mistakes && mistakes.length > 0 ? '- mistakesToNote: 2 or 3 short points (one line each) about what they got wrong and what to remember. E.g. "You mixed up X with Y — the correct idea is Z."' : '- mistakesToNote: omit or empty array if no mistakes were provided.'}`;
+
+  const response = await callOpenAI(prompt, { maxTokens: 550 });
+  const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const parsed = JSON.parse(cleaned) as { bullets?: string[]; oneThing?: string; mistakesToNote?: string[] };
+  const bullets = Array.isArray(parsed.bullets) ? parsed.bullets.slice(0, 3) : [];
+  const oneThing = typeof parsed.oneThing === 'string' ? parsed.oneThing : 'Keep reviewing to lock it in.';
+  const mistakesToNote = Array.isArray(parsed.mistakesToNote) ? parsed.mistakesToNote.slice(0, 4) : undefined;
+  return { bullets, oneThing, mistakesToNote };
+}
+
 export async function generatePracticeQuestions(
   moduleName: string,
   weakTopics: string[],

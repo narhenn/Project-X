@@ -7,6 +7,7 @@ import { VideoPlayer } from '@/components/VideoPlayer';
 import { QuizModal } from '@/components/QuizModal';
 import { ChatbotModal } from '@/components/ChatbotModal';
 import { FlashcardModal } from '@/components/FlashcardModal';
+import { SegmentLearnSummary } from '@/components/SegmentLearnSummary';
 import { demoModule } from '@/data/demoModule';
 import { progressService } from '@/lib/progress';
 import { clearStudentDataCache } from '@/lib/useStudentData';
@@ -54,6 +55,13 @@ function WatchPageContent() {
   const [flashcardReopenQuizOnClose, setFlashcardReopenQuizOnClose] = useState(true);
   const [segmentFailCounts, setSegmentFailCounts] = useState<Record<number, number>>({});
   const [peerTutoringOpen, setPeerTutoringOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryBullets, setSummaryBullets] = useState<string[]>([]);
+  const [summaryOneThing, setSummaryOneThing] = useState('');
+  const [summaryMistakesToNote, setSummaryMistakesToNote] = useState<string[]>([]);
+  /** Mistakes from failed attempts this segment; merged with current attempt when they pass. */
+  const [accumulatedMistakes, setAccumulatedMistakes] = useState<{ question: string; chosenOption: string; correctOption: string }[]>([]);
 
   const inFlightRef = useRef<Record<string, Promise<QuizQuestion[]> | null>>({});
   const lastFailRef = useRef<Record<string, number>>({});
@@ -172,35 +180,99 @@ function WatchPageContent() {
     if (!effectiveSegmentSlides[segmentIndex]) return;
     if (quizOpen) return; // don't interrupt an open quiz
     setQuizSegmentIndex(segmentIndex);
+    setAccumulatedMistakes([]);
     setQuizOpen(true);
     setPaused(true); // pause video so it doesn't hit next segment boundary
     progressService.recordSegmentReached(userId, moduleId, segmentIndex).then(loadProgress);
   }, [loadProgress, effectiveSegmentSlides, quizOpen]);
 
   const handleQuizPass = useCallback(
-    async (score: number) => {
-      await progressService.recordQuizResult(userId, moduleId, quizSegmentIndex, score);
+    async (score: number, currentMistakes?: { question: string; chosenOption: string; correctOption: string }[]) => {
+      const segmentIndex = quizSegmentIndex;
+      const topic = pageTopic;
+      const slides = effectiveSegmentSlides[segmentIndex] ?? '';
+      await progressService.recordQuizResult(userId, moduleId, segmentIndex, score);
       clearStudentDataCache(); // force fresh data on next dashboard/insights visit
       await loadProgress();
       setQuizOpen(false);
       setPaused(false);
+      setSummaryOpen(true);
+      setSummaryLoading(true);
+      setSummaryBullets([]);
+      setSummaryOneThing('');
+      setSummaryMistakesToNote([]);
+      // Merge mistakes from all attempts (failed + this pass) so "Mistakes to note" includes earlier wrong answers too
+      const seen = new Set<string>();
+      const merged: { question: string; chosenOption: string; correctOption: string }[] = [];
+      for (const m of accumulatedMistakes) {
+        if (!seen.has(m.question)) {
+          seen.add(m.question);
+          merged.push(m);
+        }
+      }
+      for (const m of currentMistakes ?? []) {
+        if (!seen.has(m.question)) {
+          seen.add(m.question);
+          merged.push(m);
+        }
+      }
+      const mistakesToSend = merged.length ? merged : undefined;
+      setAccumulatedMistakes([]);
+      try {
+        const res = await fetch('/api/segment-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic,
+            segmentIndex,
+            segmentSlides: slides.trim() || undefined,
+            mistakes: mistakesToSend,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && Array.isArray(data.bullets)) {
+          setSummaryBullets(data.bullets);
+          setSummaryOneThing(typeof data.oneThing === 'string' ? data.oneThing : '');
+          setSummaryMistakesToNote(Array.isArray(data.mistakesToNote) ? data.mistakesToNote : []);
+        }
+      } catch {
+        setSummaryBullets([]);
+        setSummaryOneThing('');
+        setSummaryMistakesToNote([]);
+      } finally {
+        setSummaryLoading(false);
+      }
     },
-    [quizSegmentIndex, loadProgress]
+    [quizSegmentIndex, pageTopic, effectiveSegmentSlides, userId, moduleId, loadProgress, accumulatedMistakes]
   );
 
-  const handleQuizFail = useCallback(async () => {
-    await progressService.recordQuizAttempt(userId, moduleId, quizSegmentIndex);
-    await loadProgress();
-    setSegmentFailCounts((prev) => {
-      const count = (prev[quizSegmentIndex] ?? 0) + 1;
-      if (count >= 3) setPeerTutoringOpen(true);
-      return { ...prev, [quizSegmentIndex]: count };
-    });
-  }, [quizSegmentIndex, loadProgress]);
+  const handleQuizFail = useCallback(
+    async (mistakes?: { question: string; chosenOption: string; correctOption: string }[]) => {
+      if (mistakes?.length) {
+        setAccumulatedMistakes((prev) => {
+          const seen = new Set(prev.map((m) => m.question));
+          const added = mistakes.filter((m) => !seen.has(m.question));
+          return added.length ? [...prev, ...added] : prev;
+        });
+      }
+      await progressService.recordQuizAttempt(userId, moduleId, quizSegmentIndex);
+      await loadProgress();
+      setSegmentFailCounts((prev) => {
+        const count = (prev[quizSegmentIndex] ?? 0) + 1;
+        if (count >= 3) setPeerTutoringOpen(true);
+        return { ...prev, [quizSegmentIndex]: count };
+      });
+    },
+    [quizSegmentIndex, userId, moduleId, loadProgress]
+  );
 
   const handleShowFlashcards = useCallback(async () => {
     const segmentSlides = effectiveSegmentSlides[quizSegmentIndex] ?? '';
     setFlashcardError(null);
+    setFlashcards([]);
+    setFlashcardOpen(true);
+    setFlashcardReopenQuizOnClose(true);
+    setQuizOpen(false);
     setFlashcardLoading(true);
     try {
       const res = await fetch('/api/generate-segment-flashcards', {
@@ -216,10 +288,7 @@ function WatchPageContent() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && Array.isArray(data.flashcards) && data.flashcards.length > 0) {
         setFlashcards(data.flashcards);
-        setFlashcardReopenQuizOnClose(true);
-        setQuizOpen(false);
         await progressService.recordFlashcardUsed(userId, moduleId, quizSegmentIndex);
-        setFlashcardOpen(true);
       } else {
         setFlashcardError(typeof data.error === 'string' ? data.error : 'Failed to generate flashcards. Try again.');
       }
@@ -429,10 +498,21 @@ function WatchPageContent() {
         key={`flashcard-${quizSegmentIndex}`}
         open={flashcardOpen}
         cards={flashcards}
+        deckKey={moduleId ? `${moduleId}_${quizSegmentIndex}` : undefined}
+        loading={flashcardLoading}
+        error={flashcardError}
         onClose={() => {
           setFlashcardOpen(false);
           if (flashcardReopenQuizOnClose) setQuizOpen(true);
         }}
+      />
+      <SegmentLearnSummary
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        bullets={summaryBullets}
+        oneThing={summaryOneThing}
+        mistakesToNote={summaryMistakesToNote}
+        loading={summaryLoading}
       />
 
       {/* Peer Tutoring Recommendation — shown after 3 quiz fails on same segment */}

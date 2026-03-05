@@ -28,8 +28,8 @@ export function QuizModal({
   errorMessage?: string | null;
   cooldownUntil?: number;
   onRetry?: () => void;
-  onPass: (score: number) => void;
-  onFail: () => void;
+  onPass: (score: number, mistakes?: { question: string; chosenOption: string; correctOption: string }[]) => void;
+  onFail: (mistakes?: { question: string; chosenOption: string; correctOption: string }[]) => void;
   onShowFlashcards?: () => void;
   flashcardLoading?: boolean;
   flashcardError?: string | null;
@@ -52,6 +52,15 @@ export function QuizModal({
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   };
 
+  const getMistakes = () =>
+    questions
+      .filter((q) => answers[q.id] !== undefined && answers[q.id] !== q.correctIndex)
+      .map((q) => ({
+        question: q.question,
+        chosenOption: q.options[answers[q.id]] ?? '—',
+        correctOption: q.options[q.correctIndex] ?? '—',
+      }));
+
   const handleSubmit = () => {
     if (questions.length === 0) return;
     let correct = 0;
@@ -62,12 +71,13 @@ export function QuizModal({
     if (pct >= PASS_THRESHOLD) {
       // Don't call onPass yet; show Proceed button
     } else {
-      onFail();
+      onFail(getMistakes());
     }
   };
 
   const handleProceed = () => {
-    if (score !== null && score >= PASS_THRESHOLD) onPass(score);
+    if (score === null || score < PASS_THRESHOLD) return;
+    onPass(score, getMistakes());
   };
 
   const handleRetry = () => {
