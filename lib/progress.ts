@@ -93,6 +93,7 @@ export const progressService: ProgressService = {
     current.segmentAttempts[segmentIndex] = (current.segmentAttempts[segmentIndex] ?? 0) + 1;
     current.quizScores[segmentIndex] = score;
     current.segmentMastery[segmentIndex] = getScoreMastery(score);
+    current.lastWatchedTimestamp = Date.now();
     if (score >= 70) current.unlockedSegmentIndex = Math.max(current.unlockedSegmentIndex, segmentIndex + 1);
     all[key] = current;
     saveAll(all);

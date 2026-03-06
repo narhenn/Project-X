@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { auth, onAuthStateChanged, getUserProfile, getAllModuleProgress, getAllSegmentQuizScores, getStudySessions } from './firebase';
+import { computeRetentionRates, computeOverallRetention, computeLearningVelocity, computePredictedScore, computeStudyEfficiency, getReviewDueTopics } from './learning-algorithms';
 
 // ---- Mock / fallback data (used when user has < 1 real quiz score) ----
 const MOCK_STUDENT_DATA: any = {
@@ -31,6 +32,15 @@ const _ta = Object.entries(
 ).map(([t, s]: [string, any]) => ({ topic: t, avg: Math.round(s.reduce((a: number, b: number) => a + b, 0) / s.length) }));
 MOCK_STUDENT_DATA.weakTopics = _ta.filter(t => t.avg < 70).sort((a, b) => a.avg - b.avg).map(t => t.topic);
 MOCK_STUDENT_DATA.strongTopics = _ta.filter(t => t.avg >= 80).sort((a, b) => b.avg - a.avg).map(t => t.topic);
+
+// Pre-compute algorithm data for mock
+const _mockRetention = computeRetentionRates(MOCK_STUDENT_DATA.quizHistory, MOCK_STUDENT_DATA.weeksActive);
+MOCK_STUDENT_DATA.retentionRates = _mockRetention;
+MOCK_STUDENT_DATA.overallRetention = computeOverallRetention(_mockRetention);
+MOCK_STUDENT_DATA.learningVelocity = computeLearningVelocity(MOCK_STUDENT_DATA.quizHistory);
+MOCK_STUDENT_DATA.predictedScore = computePredictedScore(MOCK_STUDENT_DATA.quizHistory);
+MOCK_STUDENT_DATA.studyEfficiency = computeStudyEfficiency(MOCK_STUDENT_DATA.quizHistory, MOCK_STUDENT_DATA.weeklyHoursHistory);
+MOCK_STUDENT_DATA.reviewDueTopics = getReviewDueTopics(_mockRetention);
 
 const MOCK_DASHBOARD_DATA: any = {
   student: { name: 'Narhen K.', email: 'student@ntu.edu.sg', persona: 'Long-term Gradual Learner', streak: 7 },
@@ -91,10 +101,15 @@ export function detectPhase(data: any) {
   return { phase, confidence, signals };
 }
 
-// ---- Module-level cache ----
-let _cache: { studentData: any; dashboardData: any; isRealData: boolean; uid: string } | null = null;
+// ---- Module-level cache with TTL ----
+const CACHE_TTL_MS = 30_000; // 30 seconds
+let _cache: { studentData: any; dashboardData: any; isRealData: boolean; uid: string; timestamp: number } | null = null;
 /** Monotonic version counter — incremented by clearStudentDataCache to force re-fetch */
 let _cacheVersion = 0;
+
+function isCacheValid() {
+  return _cache && (Date.now() - _cache.timestamp) < CACHE_TTL_MS;
+}
 
 /** Call after quiz completion to force fresh Firestore fetch on next page load */
 export function clearStudentDataCache() { _cache = null; _cacheVersion++; }
@@ -120,6 +135,21 @@ function buildDashModule(m: any) {
   };
 }
 
+/** Compute all learning-algorithm outputs and attach to studentData */
+function attachAlgorithmData(studentData: any) {
+  const quizHistory = studentData.quizHistory || [];
+  const weeksActive = studentData.weeksActive || 1;
+  const weeklyHoursHistory = studentData.weeklyHoursHistory || [];
+
+  const retentionRates = computeRetentionRates(quizHistory, weeksActive);
+  studentData.retentionRates = retentionRates;
+  studentData.overallRetention = computeOverallRetention(retentionRates);
+  studentData.learningVelocity = computeLearningVelocity(quizHistory);
+  studentData.predictedScore = computePredictedScore(quizHistory);
+  studentData.studyEfficiency = computeStudyEfficiency(quizHistory, weeklyHoursHistory);
+  studentData.reviewDueTopics = getReviewDueTopics(retentionRates);
+}
+
 /** Read localStorage progress and build real data from it (works for demo user without Firebase Auth) */
 function buildDataFromLocalStorage(): { studentData: any; dashboardData: any } | null {
   if (typeof window === 'undefined') return null;
@@ -134,8 +164,19 @@ function buildDataFromLocalStorage(): { studentData: any; dashboardData: any } |
     const quizHistory: any[] = [];
     entries.forEach((m: any) => {
       const scores: Record<string, number> = m.quizScores || {};
+      const rawTs = m.lastWatchedTimestamp || m.updatedAt;
+      const hasTimestamp = !!rawTs;
+      const ts = hasTimestamp ? new Date(rawTs).getTime() : 0;
+      const daysSince = hasTimestamp ? Math.max(0, (Date.now() - ts) / 86400000) : undefined;
       Object.entries(scores).forEach(([seg, score]) => {
-        quizHistory.push({ topic: m.moduleTopic || m.moduleName || m.moduleId || 'Unknown', score, week: 1 });
+        const entry: any = {
+          topic: m.moduleTopic || m.moduleName || m.moduleId || 'Unknown',
+          score,
+          week: hasTimestamp ? Math.max(1, Math.ceil((daysSince as number) / 7)) : 1,
+        };
+        // Only set daysSince when we have a real timestamp — otherwise let algorithm use week-based fallback
+        if (hasTimestamp) entry.daysSince = Math.round((daysSince as number) * 10) / 10;
+        quizHistory.push(entry);
       });
     });
 
@@ -160,6 +201,7 @@ function buildDataFromLocalStorage(): { studentData: any; dashboardData: any } |
       weakTopics,
       strongTopics,
     };
+    attachAlgorithmData(studentData);
 
     const dashboardData = {
       ...MOCK_DASHBOARD_DATA,
@@ -195,39 +237,50 @@ export function useStudentData() {
   }, [version]);
 
   useEffect(() => {
-    // If cached, skip fetch entirely
-    if (_cache) {
-      setStudentData(_cache.studentData);
-      setDashboardData(_cache.dashboardData);
-      setIsRealData(_cache.isRealData);
+    // If cached and still fresh, skip fetch entirely
+    if (isCacheValid()) {
+      setStudentData(_cache!.studentData);
+      setDashboardData(_cache!.dashboardData);
+      setIsRealData(_cache!.isRealData);
       setLoading(false);
       return;
     }
+    _cache = null;
 
     let cancelled = false;
 
+    let gotAuthUser = false;
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (cancelled) return;
       if (!user) {
-        // No Firebase Auth — try localStorage for demo user
+        // Auth may fire null first, then the real user. Wait briefly before falling back to localStorage.
+        if (!gotAuthUser) {
+          await new Promise(r => setTimeout(r, 1500));
+          if (cancelled || gotAuthUser) return; // auth resolved while we waited
+        }
+        // Truly no user — use localStorage for demo
         const local = buildDataFromLocalStorage();
         if (local) {
           setStudentData(local.studentData);
           setDashboardData(local.dashboardData);
           setIsRealData(true);
-          _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: 'local' };
+          _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: 'local', timestamp: Date.now() };
         }
         setLoading(false);
         return;
       }
+      gotAuthUser = true;
       setUid(user.uid);
 
       try {
+        // Fetch each independently so one failure doesn't kill all
+        const failures: string[] = [];
+        const safe = (p: Promise<any>, label: string) => p.catch((e: any) => { failures.push(`${label}: ${e.message}`); return null; });
         const [profile, moduleProgress, quizScores, sessions] = await Promise.all([
-          getUserProfile(user.uid),
-          getAllModuleProgress(user.uid),
-          getAllSegmentQuizScores(user.uid),
-          getStudySessions(user.uid),
+          safe(getUserProfile(user.uid), 'getUserProfile'),
+          safe(getAllModuleProgress(user.uid), 'getAllModuleProgress').then(r => r || []),
+          safe(getAllSegmentQuizScores(user.uid), 'getAllSegmentQuizScores').then(r => r || []),
+          safe(getStudySessions(user.uid), 'getStudySessions').then(r => r || []),
         ]);
 
         if (cancelled) return;
@@ -239,7 +292,7 @@ export function useStudentData() {
             setStudentData(local.studentData);
             setDashboardData(local.dashboardData);
             setIsRealData(true);
-            _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: user.uid };
+            _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: user.uid, timestamp: Date.now() };
           }
           setLoading(false);
           return;
@@ -248,13 +301,17 @@ export function useStudentData() {
         setIsRealData(true);
 
         // ---- Build quizHistory from segmentQuizScores ----
-        const quizHistory = quizScores.map((q: any) => ({
-          topic: q.topic || q.moduleTopic || q.moduleId || 'Unknown',
-          score: q.score ?? 0,
-          week: q.updatedAt?.toDate
-            ? Math.max(1, Math.ceil((Date.now() - q.updatedAt.toDate().getTime()) / (7 * 86400000)))
-            : 1,
-        }));
+        const quizHistory = quizScores.map((q: any) => {
+          const hasToDate = typeof q.updatedAt?.toDate === 'function';
+          const ts = hasToDate ? q.updatedAt.toDate().getTime() : Date.now();
+          const daysSince = Math.max(0, (Date.now() - ts) / 86400000);
+          return {
+            topic: q.topic || q.moduleTopic || q.moduleId || 'Unknown',
+            score: q.score ?? 0,
+            week: Math.max(1, Math.ceil(daysSince / 7)),
+            daysSince: Math.round(daysSince * 10) / 10,
+          };
+        });
 
         // ---- Compute weeklyHoursHistory from study sessions ----
         const weeklyHoursMap: Record<number, number> = {};
@@ -301,6 +358,7 @@ export function useStudentData() {
           weakTopics,
           strongTopics,
         };
+        attachAlgorithmData(realStudentData);
 
         // ---- Build dashboard data ----
         const quizScoresList = quizScores.map((q: any) => {
@@ -351,7 +409,7 @@ export function useStudentData() {
 
         setStudentData(realStudentData);
         setDashboardData(realDashboardData);
-        _cache = { studentData: realStudentData, dashboardData: realDashboardData, isRealData: true, uid: user.uid };
+        _cache = { studentData: realStudentData, dashboardData: realDashboardData, isRealData: true, uid: user.uid, timestamp: Date.now() };
       } catch (err) {
         console.error('useStudentData: failed to fetch Firestore data, trying localStorage', err);
         const local = buildDataFromLocalStorage();
@@ -359,7 +417,7 @@ export function useStudentData() {
           setStudentData(local.studentData);
           setDashboardData(local.dashboardData);
           setIsRealData(true);
-          _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: user.uid };
+          _cache = { studentData: local.studentData, dashboardData: local.dashboardData, isRealData: true, uid: user.uid, timestamp: Date.now() };
         }
       }
       if (!cancelled) setLoading(false);

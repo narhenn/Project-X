@@ -25,7 +25,7 @@ function BarChart({ data, maxVal, color }: { data: { label: string; value: numbe
 }
 
 export default function DashboardPage() {
-  const { dashboardData, studentData, loading: dataLoading, isRealData } = useStudentData();
+  const { dashboardData, studentData, loading: dataLoading, isRealData, uid } = useStudentData();
   const data = dashboardData;
   const [burnout, setBurnout] = useState<any>(data.burnout);
   const [burnoutLoading, setBurnoutLoading] = useState(false);
@@ -57,6 +57,17 @@ export default function DashboardPage() {
   };
 
   const overallProgress = Math.round(data.modules.reduce((sum, m) => sum + m.progress, 0) / data.modules.length);
+
+  // Algorithm-computed metrics
+  const overallRetention = studentData.overallRetention ?? 0;
+  const retentionRates = studentData.retentionRates ?? [];
+  const learningVelocity = studentData.learningVelocity ?? { velocity: 0, trend: 'steady' };
+  const predictedScore = studentData.predictedScore ?? { predicted: 0, confidence: 0, trend: 'stable' };
+  const reviewDueTopics = studentData.reviewDueTopics ?? [];
+
+  const retentionColor = overallRetention >= 75 ? 'text-green-400' : overallRetention >= 50 ? 'text-amber-400' : 'text-red-400';
+  const trendArrow = learningVelocity.trend === 'accelerating' ? '\u2191' : learningVelocity.trend === 'decelerating' ? '\u2193' : '\u2192';
+  const trendColor = learningVelocity.trend === 'accelerating' ? 'text-green-400' : learningVelocity.trend === 'decelerating' ? 'text-red-400' : 'text-slate-400';
 
   // Phase-adaptive greeting
   const firstName = data.student.name.split(' ')[0];
@@ -120,13 +131,39 @@ export default function DashboardPage() {
         {phase === 'accelerating' && <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-between"><p className="text-sm text-green-200">⚡ Your scores are climbing fast! Try a practice paper to push your limits.</p><button onClick={() => window.location.href = '/practice-paper'} className="bg-green-500 hover:bg-green-600 text-white text-xs px-4 py-2 rounded-lg transition-all whitespace-nowrap">Take Challenge</button></div>}
         {phase === 'declining' && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-between"><p className="text-sm text-red-200">📉 Your recent scores have dipped. A focused session on weak topics can help reverse the trend.</p><button onClick={() => window.location.href = '/insights'} className="bg-red-500 hover:bg-red-600 text-white text-xs px-4 py-2 rounded-lg transition-all whitespace-nowrap">View Insights</button></div>}
 
+        {/* Review Due Banner */}
+        {reviewDueTopics.length > 0 && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-between">
+            <p className="text-sm text-red-200">
+              {reviewDueTopics.length} topic{reviewDueTopics.length > 1 ? 's' : ''} need{reviewDueTopics.length === 1 ? 's' : ''} review &mdash; your memory of <span className="font-bold">{reviewDueTopics[0].topic}</span> is at {reviewDueTopics[0].retention}%
+            </p>
+            <button onClick={() => window.location.href = '/watch'} className="bg-red-500 hover:bg-red-600 text-white text-xs px-4 py-2 rounded-lg transition-all whitespace-nowrap">Review Now</button>
+          </div>
+        )}
+
         {/* Top Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🧠</span>
+              <span className="text-xs text-slate-400">Memory Retention</span>
+            </div>
+            <p className={`text-2xl font-bold ${retentionColor}`}>{overallRetention}%</p>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">📈</span>
+              <span className="text-xs text-slate-400">Learning Velocity</span>
+            </div>
+            <p className="text-2xl font-bold text-white">
+              {learningVelocity.velocity > 0 ? '+' : ''}{learningVelocity.velocity}
+              <span className="text-sm font-normal text-slate-400"> pts/quiz</span>
+              <span className={`ml-1 text-lg ${trendColor}`}>{trendArrow}</span>
+            </p>
+          </div>
           {[
-            { label: 'Overall Progress', value: `${overallProgress}%`, icon: '📊' },
             { label: 'Day Streak', value: `${data.student.streak} days`, icon: '🔥' },
             { label: 'Hours This Week', value: `${totalHours.toFixed(1)}h`, icon: '⏱️' },
-            { label: 'AI Flashcards', value: data.flashcardsGenerated, icon: '🃏' },
             { label: 'Practice Qs', value: data.practiceQuestionsAttempted, icon: '📝' },
           ].map((stat) => (
             <div key={stat.label} className="bg-white/5 border border-white/10 rounded-xl p-4">
@@ -180,6 +217,15 @@ export default function DashboardPage() {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">📈 Quiz Score Trend</h3>
               <BarChart data={data.quizScores.map(d => ({ label: d.quiz, value: d.score }))} maxVal={100} color="#8b5cf6" />
+              {predictedScore.predicted > 0 && (
+                <div className="mt-3 flex items-center gap-2 text-sm">
+                  <span className="text-slate-400">Predicted next score:</span>
+                  <span className={`font-bold ${predictedScore.trend === 'improving' ? 'text-green-400' : predictedScore.trend === 'declining' ? 'text-red-400' : 'text-blue-400'}`}>
+                    {predictedScore.predicted}%
+                  </span>
+                  <span className="text-xs text-slate-500">(confidence: {Math.round(predictedScore.confidence * 100)}%)</span>
+                </div>
+              )}
             </div>
 
             {/* AI Practice Paper — now links to full page */}
@@ -199,6 +245,47 @@ export default function DashboardPage() {
 
           {/* Right Column */}
           <div className="space-y-6">
+            {/* Memory Retention by Topic */}
+            {retentionRates.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <h3 className="text-lg font-bold text-white mb-4">🧠 Memory Retention by Topic</h3>
+                <div className="space-y-3">
+                  {retentionRates
+                    .sort((a: any, b: any) => a.retention - b.retention)
+                    .map((r: any) => {
+                      const barColor = r.retention >= 75 ? '#22c55e' : r.retention >= 50 ? '#f59e0b' : '#ef4444';
+                      const urgencyBadge = r.urgency === 'critical'
+                        ? 'bg-red-500/20 text-red-300'
+                        : r.urgency === 'review-soon'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : r.urgency === 'fading'
+                        ? 'bg-yellow-500/20 text-yellow-300'
+                        : 'bg-green-500/20 text-green-300';
+                      return (
+                        <div key={r.topic} className="p-3 bg-white/5 rounded-xl">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm text-slate-200 truncate flex-1">{r.topic}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-1.5 py-0.5 rounded-full ${urgencyBadge}`}>{r.urgency}</span>
+                              <span className="text-sm font-bold text-white w-10 text-right">{r.retention}%</span>
+                            </div>
+                          </div>
+                          <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-1.5">
+                            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${r.retention}%`, backgroundColor: barColor }} />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-slate-500">{r.daysSinceStudied}d ago &middot; was {r.originalScore}%</span>
+                            {(r.urgency === 'critical' || r.urgency === 'review-soon') && (
+                              <button onClick={() => window.location.href = '/watch'} className="text-xs text-red-400 hover:text-red-300 font-medium">Review Now</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             {/* Peer Comparison */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">👥 Anonymous Peer Comparison</h3>
