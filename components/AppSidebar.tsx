@@ -21,34 +21,40 @@ type AppSidebarProps = {
 
 export function AppSidebar({ currentPath, onSignOut }: AppSidebarProps) {
   return (
-    <aside className="w-64 min-h-screen flex flex-col shrink-0 bg-white/90 backdrop-blur-xl border-r border-slate-200/80 shadow-lg shadow-slate-200/50">
-      <div className="p-5 border-b border-slate-200/80">
-        <Link href="/" className="block group">
-          <span className="text-xs font-semibold text-slate-500 tracking-wide leading-snug group-hover:text-indigo-600 transition-colors">
+    <aside className="relative w-64 min-h-screen shrink-0 overflow-hidden border-r border-white/10 bg-[#06030d] text-white backdrop-blur-xl">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_380px_at_0%_0%,rgba(139,92,246,0.22),transparent_65%),radial-gradient(500px_340px_at_100%_100%,rgba(59,130,246,0.14),transparent_68%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#090512]/95 via-[#07040f]/97 to-[#040208]/98" />
+
+      <div className="relative z-10 border-b border-white/10 p-5">
+        <Link href="/course" className="block group">
+          <span className="text-xs font-semibold leading-snug tracking-wide text-white/55 transition-colors group-hover:text-violet-200">
             NANYANG TECHNOLOGICAL UNIVERSITY SINGAPORE
           </span>
         </Link>
       </div>
-      <div className="p-4 flex items-center gap-3 border-b border-slate-200/80">
-        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-indigo-500/30 ring-2 ring-white">
+
+      <div className="relative z-10 flex items-center gap-3 border-b border-white/10 p-4">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-900/40 ring-2 ring-white/20">
           N
         </div>
-        <span className="text-sm text-slate-700 font-medium truncate">CCDS Narhen</span>
+        <span className="truncate text-sm font-medium text-white/85">CCDS Narhen</span>
       </div>
-      <nav className="flex-1 py-4 px-2">
+
+      <nav className="relative z-10 flex-1 px-3 py-4">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[0_12px_34px_rgba(7,3,18,0.35)]">
         {SIDEBAR_NAV.map((item) => {
           const active = currentPath === item.href;
           return (
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
+              className={`mb-1.5 flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] transition-all duration-200 ${
                 active
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold shadow-sm border border-indigo-100/80'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'bg-gradient-to-r from-violet-500/35 to-indigo-500/30 font-semibold text-white shadow-[0_10px_24px_rgba(76,29,149,0.38)]'
+                  : 'text-white/72 hover:bg-white/[0.08] hover:text-white'
               }`}
             >
-              {item.icon && <span className="text-base opacity-90">{item.icon}</span>}
+              {item.icon && <span className="text-lg opacity-90">{item.icon}</span>}
               <span>{item.label}</span>
               {'badge' in item && item.badge != null && (
                 <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs flex items-center justify-center font-medium shadow-sm">
@@ -58,17 +64,19 @@ export function AppSidebar({ currentPath, onSignOut }: AppSidebarProps) {
             </Link>
           );
         })}
+        </div>
       </nav>
-      <div className="p-4 border-t border-slate-200/80 space-y-1.5">
+
+      <div className="relative z-10 space-y-1.5 border-t border-white/10 p-4">
         <button
           type="button"
           onClick={onSignOut}
-          className="block text-xs text-slate-500 hover:text-slate-800 transition-colors"
+          className="block text-sm text-white/65 transition-colors hover:text-white"
         >
           Sign Out
         </button>
         {['Privacy', 'Terms', 'Accessibility'].map((label) => (
-          <a key={label} href="#" className="block text-xs text-slate-500 hover:text-slate-800 transition-colors">
+          <a key={label} href="#" className="block text-sm text-white/65 transition-colors hover:text-white">
             {label}
           </a>
         ))}
@@ -76,3 +84,4 @@ export function AppSidebar({ currentPath, onSignOut }: AppSidebarProps) {
     </aside>
   );
 }
+

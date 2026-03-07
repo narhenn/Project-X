@@ -15,23 +15,23 @@ export default function MessagesPage() {
   const handleSignOut = () => router.push('/');
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'linear-gradient(165deg, #f8fafc 0%, #f1f5f9 35%, #e2e8f0 100%)' }}>
+    <div className="min-h-screen flex bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)] text-white">
       <AppSidebar currentPath="/messages" onSignOut={handleSignOut} />
       <main className="flex-1 overflow-auto">
         <div className="max-w-2xl mx-auto px-6 py-8">
-          <p className="font-medium text-indigo-600 text-sm uppercase tracking-widest mb-1">Messages</p>
-          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl font-bold tracking-tight text-slate-900 mb-2">
+          <p className="font-medium text-violet-300 text-sm uppercase tracking-widest mb-1">Messages</p>
+          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl font-bold tracking-tight text-white mb-2">
             Inbox
           </h1>
-          <p className="text-slate-500 text-sm mb-8">Course and system messages</p>
+          <p className="text-white/60 text-sm mb-8">Course and system messages</p>
           <ul className="space-y-2">
             {CONVOS.map((c) => (
               <li
                 key={c.id}
                 className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
                   c.unread
-                    ? 'border-indigo-200/80 bg-indigo-50/50 shadow-sm hover:bg-indigo-50/80'
-                    : 'border-slate-200/80 bg-white/90 shadow-sm hover:bg-slate-50/80'
+                    ? 'border-violet-300/25 bg-violet-500/10 shadow-sm hover:bg-violet-500/14'
+                    : 'border-white/12 bg-white/[0.06] shadow-sm hover:bg-white/[0.06]'
                 }`}
               >
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
@@ -39,11 +39,11 @@ export default function MessagesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`font-semibold ${c.unread ? 'text-slate-900' : 'text-slate-700'}`}>{c.name}</span>
-                    <span className="text-xs text-slate-500 shrink-0">{c.time}</span>
+                    <span className={`font-semibold ${c.unread ? 'text-white' : 'text-white/85'}`}>{c.name}</span>
+                    <span className="text-xs text-white/60 shrink-0">{c.time}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{c.role}</p>
-                  <p className={`text-sm mt-1 ${c.unread ? 'text-slate-800 font-medium' : 'text-slate-600'}`}>{c.preview}</p>
+                  <p className="text-xs text-white/60 mt-0.5">{c.role}</p>
+                  <p className={`text-sm mt-1 ${c.unread ? 'text-white font-medium' : 'text-white/70'}`}>{c.preview}</p>
                 </div>
                 {c.unread && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-2" />}
               </li>
@@ -54,3 +54,4 @@ export default function MessagesPage() {
     </div>
   );
 }
+

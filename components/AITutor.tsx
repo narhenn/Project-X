@@ -1,7 +1,10 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useStudentData } from '@/lib/useStudentData';
 import { authFetch } from '@/lib/api-client';
+import { auth } from '@/lib/firebaseClient';
 
 type Message = {
   role: 'user' | 'ai';
@@ -38,12 +41,12 @@ function renderMarkdown(text: string) {
     if (!line.trim()) { elements.push(<div key={key++} className="h-2" />); continue; }
     const numMatch = line.match(/^(\d+)[.)]\s+(.+)/);
     if (numMatch) {
-      elements.push(<div key={key++} className="flex gap-2 ml-1 my-0.5"><span className="text-blue-400 font-bold shrink-0">{numMatch[1]}.</span><span>{inlineFormat(numMatch[2])}</span></div>);
+      elements.push(<div key={key++} className="flex gap-2 ml-1 my-0.5"><span className="text-violet-300 font-bold shrink-0">{numMatch[1]}.</span><span>{inlineFormat(numMatch[2])}</span></div>);
       continue;
     }
     const bulletMatch = line.match(/^[-*•]\s+(.+)/);
     if (bulletMatch) {
-      elements.push(<div key={key++} className="flex gap-2 ml-1 my-0.5"><span className="text-blue-400 shrink-0">•</span><span>{inlineFormat(bulletMatch[1])}</span></div>);
+      elements.push(<div key={key++} className="flex gap-2 ml-1 my-0.5"><span className="text-violet-300 shrink-0">•</span><span>{inlineFormat(bulletMatch[1])}</span></div>);
       continue;
     }
     elements.push(<p key={key++} className="my-0.5">{inlineFormat(line)}</p>);
@@ -65,7 +68,7 @@ function inlineFormat(text: string): React.ReactNode {
     const italicMatch = remaining.match(/^([\s\S]*?)\*([\s\S]+?)\*([\s\S]*)/);
     if (italicMatch) {
       if (italicMatch[1]) parts.push(<span key={key++}>{italicMatch[1]}</span>);
-      parts.push(<em key={key++} className="text-blue-300">{italicMatch[2]}</em>);
+      parts.push(<em key={key++} className="text-violet-300">{italicMatch[2]}</em>);
       remaining = italicMatch[3]; continue;
     }
     const codeMatch = remaining.match(/^([\s\S]*?)`([\s\S]+?)`([\s\S]*)/);
@@ -80,8 +83,11 @@ function inlineFormat(text: string): React.ReactNode {
 }
 
 export default function AITutor() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState<ChatSize>('compact');
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [quizCompleted, setQuizCompleted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'ai', text: 'Hi! I\'m your Guardian AI Tutor 🛡️ I have full access to your learning analytics — memory retention, cognitive load, optimal study times, and predicted scores. Ask me anything about your studies!' },
   ]);
@@ -91,6 +97,31 @@ export default function AITutor() {
   const chatRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { studentData } = useStudentData();
+
+  useEffect(() => {
+    const refreshFlags = () => {
+      const signedIn = typeof window !== 'undefined' && window.sessionStorage.getItem('ntulearn_signed_in') === '1';
+      const quizDone = typeof window !== 'undefined' && window.localStorage.getItem('ntulearn_quiz_completed') === '1';
+      setIsAuthed(signedIn);
+      setQuizCompleted(quizDone);
+    };
+
+    refreshFlags();
+    const unsub = onAuthStateChanged(auth, (user) => {
+      const signedIn = typeof window !== 'undefined' && window.sessionStorage.getItem('ntulearn_signed_in') === '1';
+      setIsAuthed(Boolean(user) && signedIn);
+    });
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'ntulearn_quiz_completed' || e.key === 'ntulearn_signed_in') refreshFlags();
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      unsub();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -177,10 +208,14 @@ export default function AITutor() {
     setMessages([{ role: 'ai', text: 'Chat cleared! 🛡️ Ask me anything about your studies.' }]);
   };
 
+  const hiddenRoute =
+    pathname === '/' || pathname === '/login' || pathname.startsWith('/login/') || pathname === '/quiz' || pathname.startsWith('/quiz/');
+  if (!isAuthed || !quizCompleted || hiddenRoute) return null;
+
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-500 hover:bg-blue-600 rounded-full shadow-xl shadow-blue-500/30 flex items-center justify-center text-2xl text-white transition-all hover:scale-110 z-50 group">
+        className="fixed bottom-6 right-6 w-14 h-14 bg-violet-500 hover:bg-violet-600 rounded-full shadow-xl shadow-violet-500/35 flex items-center justify-center text-2xl text-white transition-all hover:scale-110 z-50 group">
         🛡️
         <span className="absolute -top-10 right-0 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10">Guardian AI Tutor</span>
       </button>
@@ -192,12 +227,12 @@ export default function AITutor() {
   return (
     <div className={`fixed ${SIZE_STYLES[size]} bg-slate-900 border border-white/10 rounded-2xl shadow-2xl shadow-black/50 flex flex-col z-50 overflow-hidden transition-all duration-300`}>
       {/* Header */}
-      <div className="bg-blue-500/10 border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0">
+      <div className="bg-violet-500/10 border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-xl">🛡️</span>
           <div>
             <p className="text-sm font-bold text-white">Guardian AI Tutor</p>
-            <p className="text-xs text-blue-300">SC3010 · RAG-powered · Live Analytics</p>
+            <p className="text-xs text-violet-300">SC3010 · RAG-powered · Live Analytics</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -224,10 +259,10 @@ export default function AITutor() {
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`${isFs ? 'max-w-[70%]' : 'max-w-[85%]'} px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
               m.role === 'user'
-                ? 'bg-blue-500 text-white rounded-br-md'
+                ? 'bg-violet-500 text-white rounded-br-md'
                 : 'bg-white/10 text-slate-200 rounded-bl-md'
             }`}>
-              {m.role === 'ai' && <span className="text-xs text-blue-400 font-bold block mb-1">🛡️ Guardian AI</span>}
+              {m.role === 'ai' && <span className="text-xs text-violet-300 font-bold block mb-1">🛡️ Guardian AI</span>}
               {m.role === 'user' && m.image && (
                 <img src={m.image} alt="Attached" className="mb-2 max-h-32 rounded-lg object-contain border border-white/20" />
               )}
@@ -237,7 +272,7 @@ export default function AITutor() {
               {/* RAG Sources */}
               {m.role === 'ai' && m.ragSources && m.ragSources.length > 0 && (
                 <details className="mt-2 border-t border-white/10 pt-2">
-                  <summary className="text-xs text-blue-400 cursor-pointer hover:text-blue-300 select-none">
+                  <summary className="text-xs text-violet-300 cursor-pointer hover:text-violet-300 select-none">
                     📚 {m.ragSources.length} lecture source{m.ragSources.length > 1 ? 's' : ''} retrieved
                   </summary>
                   <div className="mt-1.5 space-y-1">
@@ -245,7 +280,7 @@ export default function AITutor() {
                       <div key={idx} className="text-xs text-slate-400 bg-white/5 rounded-lg px-2 py-1.5">
                         <span className="text-green-400 font-medium">{s.similarity}% match</span>
                         <span className="text-slate-500 mx-1">·</span>
-                        <span className="text-blue-300">{s.topic}</span>
+                        <span className="text-violet-300">{s.topic}</span>
                         <span className="text-slate-500 mx-1">·</span>
                         <span className="italic">{s.source}</span>
                       </div>
@@ -287,11 +322,11 @@ export default function AITutor() {
         {loading && (
           <div className="flex justify-start">
             <div className="bg-white/10 px-4 py-3 rounded-2xl rounded-bl-md">
-              <span className="text-xs text-blue-400 font-bold block mb-1">🛡️ Guardian AI</span>
+              <span className="text-xs text-violet-300 font-bold block mb-1">🛡️ Guardian AI</span>
               <div className="flex gap-1.5">
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <div className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                <div className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
               </div>
             </div>
           </div>
@@ -338,10 +373,10 @@ export default function AITutor() {
           </button>
           <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Ask anything... or attach an image of your doubt"
-            className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${isFs ? 'text-base py-3' : ''}`}
+            className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 ${isFs ? 'text-base py-3' : ''}`}
             disabled={loading} />
           <button onClick={() => sendMessage()} disabled={(!input.trim() && !attachedImage) || loading}
-            className={`bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/30 text-white px-4 py-2.5 rounded-xl transition-all text-sm font-semibold ${isFs ? 'px-6 text-base' : ''}`}>
+            className={`bg-violet-500 hover:bg-violet-600 disabled:bg-violet-500/30 text-white px-4 py-2.5 rounded-xl transition-all text-sm font-semibold ${isFs ? 'px-6 text-base' : ''}`}>
             Send
           </button>
         </div>
@@ -352,3 +387,4 @@ export default function AITutor() {
     </div>
   );
 }
+

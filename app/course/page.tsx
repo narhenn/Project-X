@@ -56,59 +56,62 @@ export default function CoursePage() {
 
   return (
     <AuthGuard>
-      <div
-        className="min-h-screen flex"
-        style={{ background: 'linear-gradient(165deg, #f8fafc 0%, #f1f5f9 35%, #e2e8f0 100%)' }}
-      >
+      <div className="relative flex min-h-screen overflow-hidden bg-[#05030a] text-white">
+        <div className="pointer-events-none fixed inset-0 -z-30 bg-[#05030a]" />
+        <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(1200px_700px_at_15%_0%,rgba(139,92,246,0.24),transparent_58%),radial-gradient(900px_600px_at_85%_90%,rgba(88,31,170,0.20),transparent_62%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(150deg,rgba(2,6,23,0.96)_0%,rgba(7,5,20,0.95)_56%,rgba(18,8,38,0.9)_100%)]" />
         <AppSidebar currentPath="/course" onSignOut={handleSignOut} />
 
         {/* Main content */}
         <main className="flex-1 overflow-auto">
           <div className="min-h-full">
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-5xl mx-auto px-6 py-8">
               {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <p className="font-medium text-indigo-600 text-sm uppercase tracking-widest mb-1">NTUlearn</p>
-                  <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
-                    Courses
-                  </h1>
-                  <p className="text-slate-500 text-sm mt-1.5">Browse and manage your courses</p>
-                </div>
+              <div className="mb-8 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.02))] p-5 shadow-[0_12px_40px_rgba(6,2,14,0.36)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <p className="text-xl md:text-2xl font-semibold uppercase tracking-[0.26em] text-white">NTULEARN</p>
+                    <span className="text-white/35">|</span>
+                    <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-xl font-semibold tracking-wide text-violet-200">
+                      Courses
+                    </h1>
+                  </div>
                 <div className="flex items-center gap-3">
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold shadow-sm border border-slate-200 transition-all duration-200"
+                    className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white/90 shadow-[0_12px_30px_rgba(0,0,0,0.22)] transition-all duration-200 hover:bg-white/[0.1]"
                   >
                     <span className="text-lg">←</span>
                     Dashboard
                   </Link>
-                  <a
-                    href="#"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-lg shadow-indigo-500/25 border border-indigo-500/20 transition-all duration-200"
+                  <Link
+                    href="/course"
+                    className="flex items-center gap-2 rounded-full border border-violet-300/20 bg-gradient-to-r from-violet-500/85 to-indigo-500/85 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/35 transition-all duration-200 hover:from-violet-500 hover:to-indigo-500"
                   >
                     <span className="text-lg">📚</span>
-                    Course Catalogue
-                  </a>
+                    Course
+                  </Link>
                 </div>
+              </div>
+                <p className="mt-2 text-sm text-white/60">Browse and manage your courses</p>
               </div>
 
               {/* Toolbar */}
               <div
-                className="flex flex-wrap items-center gap-3 mb-8 p-4 rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
+                className="mb-8 flex flex-wrap items-center gap-3 overflow-hidden rounded-2xl border border-white/10 p-4"
                 style={{
                   background:
-                    'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.98) 100%)',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+                    'linear-gradient(180deg, rgba(255,255,255,0.085) 0%, rgba(148,163,184,0.05) 100%)',
+                  boxShadow: '0 18px 45px rgba(2,6,23,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
                 }}
               >
-                <div className="flex items-center gap-0.5 p-1 bg-slate-100 rounded-xl">
+                <div className="flex items-center gap-0.5 rounded-xl bg-white/[0.06] p-1">
                   <button
                     onClick={() => setView('grid')}
                     className={`p-2.5 rounded-lg transition-all duration-200 ${
                       view === 'grid'
-                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80'
-                        : 'text-slate-500 hover:text-slate-700'
+                        ? 'bg-white/90 text-slate-900 shadow-sm ring-1 ring-white/35'
+                        : 'text-white/60 hover:text-white'
                     }`}
                     title="Grid view"
                   >
@@ -120,8 +123,8 @@ export default function CoursePage() {
                     onClick={() => setView('list')}
                     className={`p-2.5 rounded-lg transition-all duration-200 ${
                       view === 'list'
-                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80'
-                        : 'text-slate-500 hover:text-slate-700'
+                        ? 'bg-white/90 text-slate-900 shadow-sm ring-1 ring-white/35'
+                        : 'text-white/60 hover:text-white'
                     }`}
                     title="List view"
                   >
@@ -134,11 +137,11 @@ export default function CoursePage() {
                     </svg>
                   </button>
                 </div>
-                <span className="text-sm text-slate-600 font-medium">{count} results</span>
+                <span className="text-sm font-medium text-white/70">{count} results</span>
 
                 <div className="flex-1 min-w-[220px] max-w-md">
                   <div className="relative group">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/45 transition-colors group-focus-within:text-violet-300">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
@@ -153,7 +156,7 @@ export default function CoursePage() {
                       placeholder="Search your courses"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200"
+                      className="w-full rounded-xl border border-white/15 bg-black/20 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/40 transition-all duration-200 focus:border-violet-300/45 focus:outline-none focus:ring-2 focus:ring-violet-400/20"
                     />
                   </div>
                 </div>
@@ -161,7 +164,7 @@ export default function CoursePage() {
                 <select
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  className="px-4 py-2.5 bg-white/80 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all cursor-pointer"
+                  className="cursor-pointer rounded-xl border border-white/15 bg-black/20 px-4 py-2.5 text-sm text-white/90 transition-all focus:border-violet-300/45 focus:outline-none focus:ring-2 focus:ring-violet-400/20"
                 >
                   <option>All courses</option>
                   <option>Enrolled</option>
@@ -171,7 +174,7 @@ export default function CoursePage() {
                 <select
                   value={perPage}
                   onChange={(e) => setPerPage(Number(e.target.value))}
-                  className="px-4 py-2.5 bg-white/80 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all cursor-pointer"
+                  className="cursor-pointer rounded-xl border border-white/15 bg-black/20 px-4 py-2.5 text-sm text-white/90 transition-all focus:border-violet-300/45 focus:outline-none focus:ring-2 focus:ring-violet-400/20"
                 >
                   <option value={10}>10 per page</option>
                   <option value={25}>25 per page</option>
@@ -183,7 +186,7 @@ export default function CoursePage() {
               <div
                 className={
                   view === 'grid'
-                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'
                     : 'flex flex-col gap-4'
                 }
               >
@@ -193,16 +196,16 @@ export default function CoursePage() {
                   const articleEl = (
                     <article
                       key={course.id}
-                      className={`group bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-md hover:shadow-xl hover:shadow-slate-300/40 hover:-translate-y-0.5 hover:border-slate-300/80 transition-all duration-300 ${
+                      className={`group overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-violet-500/[0.16] via-white/[0.05] to-white/[0.03] shadow-[0_18px_45px_rgba(2,6,23,0.35)] transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-300/30 hover:shadow-[0_24px_58px_rgba(76,29,149,0.34)] ${
                         isComputerSecurity ? 'cursor-pointer' : ''
                       } ${view === 'list' ? 'flex gap-5 p-5' : ''}`}
                       style={{
                         boxShadow:
-                          '0 4px 6px -1px rgba(0,0,0,0.06), 0 2px 4px -2px rgba(0,0,0,0.04)',
+                          '0 12px 26px rgba(2,6,23,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
                       }}
                     >
                       <div
-                        className={`relative bg-slate-300 overflow-hidden ${
+                        className={`relative overflow-hidden bg-slate-800 ${
                           view === 'grid' ? 'h-44' : 'w-48 h-36 shrink-0 rounded-xl'
                         }`}
                       >
@@ -243,20 +246,20 @@ export default function CoursePage() {
                       </div>
 
                       <div className="p-5 flex flex-col min-w-0">
-                        <p className="text-xs text-slate-500 font-mono mb-1.5 truncate tracking-tight">{course.code}</p>
-                        <h2 className="font-['Plus_Jakarta_Sans',sans-serif] text-sm font-semibold text-slate-900 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors leading-snug">
+                        <p className="mb-1.5 truncate font-mono text-xs tracking-tight text-white/50">{course.code}</p>
+                        <h2 className="mb-2 line-clamp-2 font-['Plus_Jakarta_Sans',sans-serif] text-sm font-semibold leading-snug text-white transition-colors group-hover:text-violet-200">
                           {course.title}
                         </h2>
-                        <span className="inline-flex w-fit px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200/80 mb-3 shadow-sm">
+                        <span className="mb-3 inline-flex w-fit rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300 shadow-sm">
                           {course.status}
                         </span>
 
                         {isComputerSecurity ? (
-                          <span className="text-xs text-indigo-600 font-medium truncate">{course.instructor}</span>
+                          <span className="truncate text-xs font-medium text-violet-200">{course.instructor}</span>
                         ) : (
                           <a
                             href="#"
-                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium truncate transition-colors"
+                            className="truncate text-xs font-medium text-violet-200 transition-colors hover:text-violet-100"
                           >
                             {course.instructor}
                           </a>
@@ -270,7 +273,7 @@ export default function CoursePage() {
                               e.stopPropagation();
                               toggleFavorite(course.id);
                             }}
-                            className="mt-3 self-start p-2 rounded-full text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all duration-200"
+                            className="mt-3 self-start rounded-full p-2 text-white/45 transition-all duration-200 hover:bg-amber-50/10 hover:text-amber-400"
                             aria-label="Toggle favorite"
                           >
                             {favorites.has(course.id) ? (
@@ -315,3 +318,4 @@ export default function CoursePage() {
     </AuthGuard>
   );
 }
+

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useStudentData, computeWeakStrong } from '@/lib/useStudentData';
 import { authFetch } from '@/lib/api-client';
 
@@ -414,6 +415,7 @@ function AgentVisualizerTab({ studentData }: { studentData: any }) {
 }
 
 export default function InsightsPage() {
+  const router = useRouter();
   const { studentData, loading: dataLoading, isRealData } = useStudentData();
   const [ins, setIns] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -423,6 +425,7 @@ export default function InsightsPage() {
   const [selectedModule, setSelectedModule] = useState('ALL');
   const [showSignals, setShowSignals] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const featureAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const AVAILABLE_MODULES = [
     { code: 'ALL', name: 'All Modules' },
@@ -480,6 +483,17 @@ export default function InsightsPage() {
     fetch_();
   }, [selectedModule]);
 
+  const handleFeatureClick = (featureId: string) => {
+    setTab(featureId);
+    if (featureId === 'careless' || featureId === 'failures') fetchWeakness();
+    setTimeout(() => {
+      featureAnchorRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  };
+
   const phase = ins?.learningStateAnalysis;
   const color = pc[phase?.currentPhase] || '#3b82f6';
   const emoji = pe[phase?.currentPhase] || '📈';
@@ -494,18 +508,36 @@ export default function InsightsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
-      <div className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3"><h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1><span className="text-slate-500">|</span><span className="text-sm text-slate-300">AI Insights</span></div>
+    <main className="relative min-h-screen overflow-hidden bg-[#05030a] text-white">
+      <div className="fixed inset-0 -z-30 bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)]" />
+      <div className="fixed inset-0 -z-20 bg-[radial-gradient(circle_at_16%_18%,rgba(59,130,246,0.18),transparent_20%),radial-gradient(circle_at_82%_14%,rgba(168,85,247,0.20),transparent_22%),radial-gradient(circle_at_80%_40%,rgba(236,72,153,0.12),transparent_20%),radial-gradient(circle_at_25%_72%,rgba(34,211,238,0.14),transparent_22%),radial-gradient(circle_at_50%_86%,rgba(124,58,237,0.20),transparent_30%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:36px_36px] [mask-image:radial-gradient(circle_at_center,black,transparent_88%)] opacity-25" />
+      <div className="pointer-events-none absolute left-1/2 top-[10%] h-[440px] w-[920px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(126,63,242,0.30)_0%,_rgba(59,130,246,0.14)_28%,_rgba(0,0,0,0)_74%)] blur-[36px]" />
+      <div className="pointer-events-none absolute right-[10%] top-[24%] h-[320px] w-[320px] rounded-full bg-fuchsia-500/12 blur-[100px]" />
+      <div className="pointer-events-none absolute bottom-[-120px] left-[18%] h-[360px] w-[620px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(124,58,237,0.24)_0%,_rgba(0,0,0,0)_72%)] blur-[44px]" />
+
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => window.location.href = '/dashboard'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Dashboard</button>
-            <button onClick={() => window.location.href = '/course'} className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all">Course</button>
+            <button onClick={() => router.push('/course')} className="font-sans text-[1.15rem] font-semibold uppercase tracking-[0.34em] text-white md:text-[2rem]">
+              NTULEARN
+            </button>
+            <span className="text-white/35">|</span>
+            <span className="text-sm text-white/55 md:text-base">Insights</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button onClick={() => router.push('/dashboard')} className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white/85 transition hover:bg-white/[0.1]">
+              Dashboard
+            </button>
+            <button onClick={() => router.push('/course')} className="rounded-full border border-cyan-400/30 bg-[linear-gradient(180deg,rgba(34,211,238,0.28),rgba(37,99,235,0.22))] px-5 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.2)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(180deg,rgba(34,211,238,0.36),rgba(37,99,235,0.3))]">
+              Courses
+            </button>
           </div>
         </div>
-      </div>
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+      </header>
+
+      <section className="relative mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10 [&_.text-xs]:text-[12.5px] [&_.text-sm]:text-[14.5px]">
+        <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div><h2 className="text-xl sm:text-2xl font-bold text-white mb-1">AI Learning Intelligence 🧠</h2><p className="text-sm text-slate-400"><span className="text-blue-300 font-medium">{selectedModule === 'ALL' ? 'All Modules' : selectedModule}</span> · {filteredStudentData.quizHistory.length} scores, {filteredStudentData.weeksActive} weeks of data</p></div>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -550,7 +582,26 @@ export default function InsightsPage() {
               </div>
             )}
 
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">{tabs.map(t => (<button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'careless' || t.id === 'failures') fetchWeakness(); }} className={`px-3 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${tab === t.id ? 'bg-blue-500 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{t.label}</button>))}</div>
+            <div className="mb-8 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+              <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/45">AI Features Enabled</p>
+              <div className="flex flex-wrap gap-2">
+                {tabs.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleFeatureClick(t.id)}
+                    className={`rounded-full border px-3.5 py-1.5 text-xs transition ${
+                      tab === t.id
+                        ? 'border-cyan-400/35 bg-cyan-400/15 text-cyan-100'
+                        : 'border-white/10 bg-white/[0.05] text-white/70 hover:bg-white/[0.1]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div ref={featureAnchorRef} className="mb-1 scroll-mt-28" />
 
             {(printing || tab === 'timeline') && (
               <div className="space-y-6">
@@ -652,15 +703,15 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {tab === 'predict' && <PredictionTab scores={filteredStudentData.quizHistory.map((q: any) => q.score)} topics={filteredStudentData.quizHistory} />}
-            {tab === 'modules' && <ModuleDiveTab studentData={filteredStudentData} />}
+            {(tab === 'predict') && <PredictionTab scores={filteredStudentData.quizHistory.map((q: any) => q.score)} topics={filteredStudentData.quizHistory} />}
+            {(tab === 'modules') && <ModuleDiveTab studentData={filteredStudentData} />}
             {(printing || tab === 'careless') && <CarelessWeaknessTab data={weaknessData} />}
             {(printing || tab === 'failures') && <RepeatedFailuresTab data={weaknessData} />}
-            {tab === 'flashcards' && <FlashcardsTab studentData={filteredStudentData} />}
-            {tab === 'studyplan' && <StudyPlanTab studentData={filteredStudentData} />}
-            {tab === 'agents' && <AgentVisualizerTab studentData={filteredStudentData} />}
+            {(tab === 'flashcards') && <FlashcardsTab studentData={filteredStudentData} />}
+            {(tab === 'studyplan') && <StudyPlanTab studentData={filteredStudentData} />}
+            {(tab === 'agents') && <AgentVisualizerTab studentData={filteredStudentData} />}
 
-            {tab === 'nudges' && <div className="space-y-4">
+            {(tab === 'nudges') && <div className="space-y-4">
               {/* Action Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <button onClick={() => window.location.href = '/watch'} className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-left hover:bg-blue-500/20 transition-all group">
@@ -723,7 +774,9 @@ export default function InsightsPage() {
             {ins.meta && <div className="flex items-center gap-4 text-xs text-slate-500 mt-6"><span>⚡ {ins.meta.analysisTimeMs}ms</span><span>📊 {ins.meta.dataPointsAnalyzed} data points</span><span>🔧 {ins.meta.rulesApplied} rules</span><span>🧠 {ins.meta.featuresComputed} engines</span><span>🤖 {ins.meta.aiModel}</span></div>}
           </>
         ) : <div className="text-center py-16"><p className="text-red-400">Analysis failed. Click Refresh.</p></div>}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
+
+

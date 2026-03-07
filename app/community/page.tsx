@@ -2,6 +2,7 @@
 
 import AuthGuard from '@/components/AuthGuard';
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useStudentData } from '@/lib/useStudentData';
 import { authFetch } from '@/lib/api-client';
 import { auth, saveStudyProfile, getStudyProfile, findStudyMatches, getCommunityPosts, createCommunityPost, addPostReply, votePost } from '@/lib/firebase';
@@ -93,14 +94,16 @@ const modules = ['All', 'SC1003', 'SC1005', 'SC2006', 'MH1812'];
 const topics = ['All', 'Control Structures', 'Loops', 'Functions', 'Arrays', 'Recursion'];
 
 export default function CommunityPage() {
+  const router = useRouter();
   const [posts, setPosts] = useState<any[]>(SEED_POSTS);
   const [postsLoading, setPostsLoading] = useState(false);
-  const [filterModule, setFilterModule] = useState('All');
-  const [filterTopic, setFilterTopic] = useState('All');
+  const [filterModules, setFilterModules] = useState<string[]>(['All']);
+  const [filterTopics, setFilterTopics] = useState<string[]>(['All']);
   const [showNew, setShowNew] = useState(false);
   const [showReplying, setShowReplying] = useState<string | number | null>(null);
   const [expandedPost, setExpandedPost] = useState<string | number | null>(null);
-  const [voted, setVoted] = useState<Record<string, boolean>>({});
+  const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down' | null>>({});
+  const [joinedGroups, setJoinedGroups] = useState<Record<string, boolean>>({});
 
   // Study Matcher state
   const { studentData } = useStudentData();
@@ -215,30 +218,85 @@ export default function CommunityPage() {
   const [aiLoading, setAiLoading] = useState<string | number | null>(null);
 
   const filtered = posts.filter((p) => {
-    if (filterModule !== 'All' && p.module !== filterModule) return false;
-    if (filterTopic !== 'All' && p.topic !== filterTopic) return false;
+    const modulePass = filterModules.includes('All') || filterModules.includes(p.module);
+    const topicPass = filterTopics.includes('All') || filterTopics.includes(p.topic);
+    if (!modulePass) return false;
+    if (!topicPass) return false;
     return true;
   });
 
+  const toggleMultiFilter = (
+    value: string,
+    selected: string[],
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    if (value === 'All') {
+      setSelected(['All']);
+      return;
+    }
+
+    const base = selected.filter((s) => s !== 'All');
+    const exists = base.includes(value);
+    const next = exists ? base.filter((s) => s !== value) : [...base, value];
+    setSelected(next.length > 0 ? next : ['All']);
+  };
+
   const handleVote = async (postId: string | number, type: 'up' | 'down') => {
-    const key = `${postId}-${type}`;
-    if (voted[key]) return;
+    const id = String(postId);
+    const previousVote = userVotes[id] ?? null;
 
-    setVoted((prev) => ({ ...prev, [key]: true }));
-
-    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
-        if (p.id !== postId) return p;
-        const field = type === 'up' ? 'upvotes' : 'downvotes';
-        return { ...p, [field]: (p[field] ?? 0) + 1 };
+        if (String(p.id) !== id) return p;
+
+        const up = p.upvotes ?? 0;
+        const down = p.downvotes ?? 0;
+
+        if (previousVote === type) {
+          return {
+            ...p,
+            upvotes: type === 'up' ? Math.max(0, up - 1) : up,
+            downvotes: type === 'down' ? Math.max(0, down - 1) : down,
+          };
+        }
+
+        if (previousVote && previousVote !== type) {
+          return {
+            ...p,
+            upvotes:
+              previousVote === 'up'
+                ? Math.max(0, up - 1)
+                : type === 'up'
+                ? up + 1
+                : up,
+            downvotes:
+              previousVote === 'down'
+                ? Math.max(0, down - 1)
+                : type === 'down'
+                ? down + 1
+                : down,
+          };
+        }
+
+        return {
+          ...p,
+          upvotes: type === 'up' ? up + 1 : up,
+          downvotes: type === 'down' ? down + 1 : down,
+        };
       })
     );
 
-    try {
-      await votePost(String(postId), type);
-    } catch (e) {
-      console.error('Failed to vote:', e);
+    setUserVotes((prev) => ({
+      ...prev,
+      [id]: previousVote === type ? null : type,
+    }));
+
+    if (!previousVote) {
+      try {
+        await votePost(id, type);
+      } catch (e) {
+        console.error('Failed to vote:', e);
+      }
     }
   };
 
@@ -343,91 +401,116 @@ export default function CommunityPage() {
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, solved: !p.solved } : p)));
   };
 
-  const joinStudyGroup = (postId: string | number) => {
+  const toggleJoinStudyGroup = (postId: string | number) => {
+    const id = String(postId);
+    const hasJoined = joinedGroups[id] ?? false;
+
     setPosts((prev) =>
       prev.map((p) => {
-        if (p.id !== postId || !p.studyGroup) return p;
-        // Prevent over-joining
-        if (p.studyGroup.joined >= p.studyGroup.spots) return p;
-        return { ...p, studyGroup: { ...p.studyGroup, joined: p.studyGroup.joined + 1 } };
+        if (String(p.id) !== id || !p.studyGroup) return p;
+        if (!hasJoined && p.studyGroup.joined >= p.studyGroup.spots) return p;
+        return {
+          ...p,
+          studyGroup: {
+            ...p.studyGroup,
+            joined: hasJoined
+              ? Math.max(0, p.studyGroup.joined - 1)
+              : p.studyGroup.joined + 1,
+          },
+        };
       })
     );
+
+    setJoinedGroups((prev) => ({ ...prev, [id]: !hasJoined }));
   };
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+      <main className="relative min-h-screen overflow-hidden bg-[#05030a] text-white [&_.text-sm]:text-[14.5px] [&_.text-xs]:text-[12.5px]">
+        <div className="fixed inset-0 -z-30 bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)]" />
+        <div className="fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_6%,rgba(143,84,255,0.22),transparent_18%),radial-gradient(circle_at_16%_24%,rgba(88,31,170,0.18),transparent_24%),radial-gradient(circle_at_84%_20%,rgba(88,31,170,0.18),transparent_24%),radial-gradient(circle_at_50%_48%,rgba(126,63,242,0.18),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(79,25,150,0.18),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(39,10,74,0.32),transparent_32%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_50%_44%,rgba(170,110,255,0.10),transparent_14%),radial-gradient(circle_at_50%_72%,rgba(112,44,214,0.12),transparent_22%)]" />
+        <div className="pointer-events-none absolute left-1/2 top-[14%] h-[520px] w-[980px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(126,63,242,0.22)_0%,_rgba(73,21,138,0.16)_28%,_rgba(28,3,51,0.10)_48%,_rgba(0,0,0,0)_74%)] blur-[34px]" />
+        <div className="pointer-events-none absolute bottom-[-180px] left-1/2 h-[480px] w-[1100px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(94,41,180,0.20)_0%,_rgba(39,10,74,0.16)_30%,_rgba(0,0,0,0)_74%)] blur-[28px]" />
+
         {/* Header */}
-        <div className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
-          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <header className="sticky top-0 z-50 border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] backdrop-blur-2xl">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-extrabold text-white">
-                NTU<span className="text-blue-400">learn</span>
-              </h1>
+              <button
+                onClick={() => router.push('/course')}
+                className="font-sans text-[1.15rem] font-semibold uppercase tracking-[0.34em] text-white md:text-[2rem]"
+              >
+                NTULEARN
+              </button>
               <span className="text-slate-500">|</span>
               <span className="text-sm text-slate-300">Community Forum</span>
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => (window.location.href = '/dashboard')}
-                className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all"
+                onClick={() => router.push('/dashboard')}
+                className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white/85 transition hover:bg-white/[0.1]"
               >
                 Dashboard
               </button>
               <button
-                onClick={() => (window.location.href = '/course')}
-                className="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-all"
+                onClick={() => router.push('/course')}
+                className="rounded-full border border-cyan-400/30 bg-[linear-gradient(180deg,rgba(34,211,238,0.28),rgba(37,99,235,0.22))] px-5 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.2)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(180deg,rgba(34,211,238,0.36),rgba(37,99,235,0.3))]"
               >
-                Course
+                Courses
               </button>
             </div>
           </div>
-        </div>
+        </header>
 
         <div className="max-w-4xl mx-auto px-4 py-6">
           {/* Top Bar */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-7">
             <div>
-              <h2 className="text-2xl font-bold text-white">Study Community 💬</h2>
+              <h2 className="text-3xl font-bold text-white">Study Community 💬</h2>
               <p className="text-sm text-slate-400 mt-1">Ask questions, help peers, form study groups</p>
             </div>
             <button
               onClick={() => setShowNew(true)}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-blue-500/25"
+              className="border border-violet-400/30 bg-[linear-gradient(180deg,rgba(139,92,246,0.95),rgba(76,29,149,0.95))] text-white font-semibold px-5 py-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-violet-500/25"
             >
               + New Post
             </button>
           </div>
 
           {/* Filters */}
-          <div className="flex gap-3 mb-6 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Module:</span>
-              {modules.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setFilterModule(m)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    filterModule === m ? 'bg-blue-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
+          <div className="mb-7 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-white/45">Module</p>
+              <div className="flex flex-wrap gap-2">
+                {modules.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => toggleMultiFilter(m, filterModules, setFilterModules)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      filterModules.includes(m) ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Topic:</span>
-              {topics.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setFilterTopic(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    filterTopic === t ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-white/45">Topic</p>
+              <div className="flex flex-wrap gap-2">
+                {topics.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => toggleMultiFilter(t, filterTopics, setFilterTopics)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      filterTopics.includes(t) ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -640,7 +723,7 @@ export default function CommunityPage() {
                       <button
                         onClick={() => handleVote(post.id, 'up')}
                         className={`text-lg hover:scale-125 transition-transform ${
-                          voted[`${post.id}-up`] ? 'text-green-400' : 'text-slate-500'
+                          userVotes[String(post.id)] === 'up' ? 'text-green-400' : 'text-slate-500'
                         }`}
                       >
                         ▲
@@ -649,7 +732,7 @@ export default function CommunityPage() {
                       <button
                         onClick={() => handleVote(post.id, 'down')}
                         className={`text-lg hover:scale-125 transition-transform ${
-                          voted[`${post.id}-down`] ? 'text-red-400' : 'text-slate-500'
+                          userVotes[String(post.id)] === 'down' ? 'text-red-400' : 'text-slate-500'
                         }`}
                       >
                         ▼
@@ -687,10 +770,15 @@ export default function CommunityPage() {
                               </p>
                             </div>
                             <button
-                              onClick={() => joinStudyGroup(post.id)}
-                              className="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all"
+                              onClick={() => toggleJoinStudyGroup(post.id)}
+                              disabled={!joinedGroups[String(post.id)] && post.studyGroup.joined >= post.studyGroup.spots}
+                              className={`text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all ${
+                                joinedGroups[String(post.id)]
+                                  ? 'bg-rose-500 hover:bg-rose-600'
+                                  : 'bg-green-500 hover:bg-green-600 disabled:bg-green-500/50'
+                              }`}
                             >
-                              Join Group
+                              {joinedGroups[String(post.id)] ? 'Leave Group' : 'Join Group'}
                             </button>
                           </div>
 
@@ -813,7 +901,7 @@ export default function CommunityPage() {
             </div>
           )}
         </div>
-      </div>
+      </main>
     </AuthGuard>
   );
 }

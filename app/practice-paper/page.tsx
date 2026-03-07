@@ -311,12 +311,15 @@ export default function PracticePaperPage() {
 
   if (phase === 'setup') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+      <div className="relative min-h-screen overflow-hidden bg-[#05030a] text-white">
+        <div className="pointer-events-none fixed inset-0 -z-30 bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_6%,rgba(143,84,255,0.2),transparent_16%),radial-gradient(circle_at_16%_24%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_84%_20%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_50%_48%,rgba(126,63,242,0.16),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(79,25,150,0.16),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(39,10,74,0.3),transparent_32%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_50%_44%,rgba(170,110,255,0.08),transparent_14%),radial-gradient(circle_at_50%_72%,rgba(112,44,214,0.1),transparent_22%)]" />
         {/* Nav */}
-        <div className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
-          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 z-50 px-3 pt-4">
+          <div className="mx-auto flex max-w-5xl items-center justify-between rounded-full border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-5 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_18px_60px_rgba(12,4,25,0.28)] backdrop-blur-2xl md:px-8">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1>
+              <h1 className="text-xl font-extrabold text-white">NTU<span className="text-violet-300">learn</span></h1>
               <span className="text-slate-500">|</span>
               <span className="text-sm text-slate-300">AI Practice Paper</span>
             </div>
@@ -331,7 +334,7 @@ export default function PracticePaperPage() {
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-extrabold text-white mb-2">📝 AI Practice Paper Generator</h2>
-            <p className="text-slate-400">Generate a full mock exam for <span className="text-blue-300 font-semibold">{COURSE.code} — {COURSE.title}</span></p>
+            <p className="text-slate-400">Generate a full mock exam for <span className="text-violet-300 font-semibold">{COURSE.code} — {COURSE.title}</span></p>
             <p className="text-xs text-slate-500 mt-1">Instructor: {COURSE.instructor}</p>
           </div>
 
@@ -347,7 +350,7 @@ export default function PracticePaperPage() {
                   setSelectedSegments(SEGMENTS.map((_, i) => i));
                   setSelectedSubTopics(ALL_TOPICS.flatMap(([, subs]) => subs));
                 }
-              }} className="text-xs text-blue-400 hover:text-blue-300">
+              }} className="text-xs text-violet-400 hover:text-violet-300">
                 {selectedSegments.length === SEGMENTS.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
@@ -356,12 +359,12 @@ export default function PracticePaperPage() {
                 <button key={i} onClick={() => toggleSegment(i)}
                   className={`w-full p-4 rounded-xl border text-left transition-all ${
                     selectedSegments.includes(i)
-                      ? 'bg-blue-500/20 border-blue-500/40 ring-1 ring-blue-500/30'
+                      ? 'bg-violet-500/20 border-violet-500/40 ring-1 ring-violet-500/30'
                       : 'bg-white/5 border-white/10 hover:bg-white/10'
                   }`}>
                   <div className="flex items-center gap-3">
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                      selectedSegments.includes(i) ? 'bg-blue-500 text-white' : 'bg-white/10 text-slate-400'
+                      selectedSegments.includes(i) ? 'bg-violet-500 text-white' : 'bg-white/10 text-slate-400'
                     }`}>{i + 1}</span>
                     <div>
                       <p className="text-sm font-bold text-white">{seg.title}</p>
@@ -413,7 +416,7 @@ export default function PracticePaperPage() {
                     {[5, 10, 15, 20].map(n => (
                       <button key={n} onClick={() => setMcqCount(n)}
                         className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-                          mcqCount === n ? 'bg-blue-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                          mcqCount === n ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                         }`}>{n}</button>
                     ))}
                   </div>
@@ -455,7 +458,7 @@ export default function PracticePaperPage() {
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
               selectedSegments.length === 0 || loading
                 ? 'bg-white/5 text-slate-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-500 to-violet-500 text-white hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.01]'
+                : 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg hover:shadow-violet-500/25 hover:scale-[1.01]'
             }`}>
             {loading ? (
               <span className="flex items-center justify-center gap-3">
@@ -515,21 +518,25 @@ export default function PracticePaperPage() {
 
   if (phase === 'exam' && paper) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
-        <div className="sticky top-0 z-50 border-b border-white/10 bg-slate-900/90 backdrop-blur-xl">
-          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div>
-              <h1 className="text-sm font-bold text-white">{paper.title}</h1>
-              <p className="text-xs text-slate-400">{COURSE.code} · {paper.totalMarks} marks</p>
+      <div className="relative min-h-screen overflow-hidden bg-[#05030a] text-white">
+        <div className="pointer-events-none fixed inset-0 -z-30 bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_6%,rgba(143,84,255,0.2),transparent_16%),radial-gradient(circle_at_16%_24%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_84%_20%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_50%_48%,rgba(126,63,242,0.16),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(79,25,150,0.16),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(39,10,74,0.3),transparent_32%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_50%_44%,rgba(170,110,255,0.08),transparent_14%),radial-gradient(circle_at_50%_72%,rgba(112,44,214,0.1),transparent_22%)]" />
+        <div className="sticky top-0 z-50 px-3 pt-4">
+          <div className="mx-auto flex max-w-5xl items-center justify-between rounded-full border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-5 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_18px_60px_rgba(12,4,25,0.28)] backdrop-blur-2xl md:px-8">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-extrabold text-white">NTU<span className="text-violet-300">learn</span></h1>
+              <span className="text-slate-500">|</span>
+              <span className="text-sm text-slate-300">AI Practice Paper</span>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="text-xs text-slate-400">Progress</p>
                 <p className="text-sm font-bold text-white">{answeredCount()}/{totalQuestions}</p>
               </div>
-              <div className={`px-4 py-2 rounded-xl ${timeLeft < 300 ? 'bg-red-500/20 border border-red-500/30' : 'bg-blue-500/20 border border-blue-500/30'}`}>
+              <div className={`px-4 py-2 rounded-xl ${timeLeft < 300 ? 'bg-red-500/20 border border-red-500/30' : 'bg-violet-500/20 border border-violet-500/30'}`}>
                 <p className="text-xs text-slate-400">Time</p>
-                <p className={`text-lg font-extrabold font-mono ${timeLeft < 300 ? 'text-red-400' : 'text-blue-300'}`}>{formatTime(timeLeft)}</p>
+                <p className={`text-lg font-extrabold font-mono ${timeLeft < 300 ? 'text-red-400' : 'text-violet-300'}`}>{formatTime(timeLeft)}</p>
               </div>
               <button onClick={handleSubmit} className="bg-green-500 hover:bg-green-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all">
                 Submit Paper
@@ -544,14 +551,14 @@ export default function PracticePaperPage() {
               <div className="mb-4">
                 <h2 className="text-lg font-bold text-white">{section.name}</h2>
                 <p className="text-sm text-slate-400">{section.instructions}</p>
-                <p className="text-xs text-blue-400 mt-1">[{section.totalMarks} marks]</p>
+                <p className="text-xs text-violet-400 mt-1">[{section.totalMarks} marks]</p>
               </div>
               <div className="space-y-4">
                 {section.questions.map((q, qi) => (
                   <div key={q.id} className="bg-white/5 border border-white/10 rounded-2xl p-6">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-xs font-bold text-blue-300">{qi + 1}</span>
+                        <span className="w-8 h-8 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-violet-300">{qi + 1}</span>
                         <span className="text-xs text-slate-500">{q.topic}</span>
                         <DiffBadge d={q.difficulty} />
                       </div>
@@ -564,7 +571,7 @@ export default function PracticePaperPage() {
                           <button key={oi} onClick={() => setMcqAnswers(prev => ({ ...prev, [q.id]: oi }))}
                             className={`w-full text-left p-3 rounded-xl border transition-all text-sm ${
                               mcqAnswers[q.id] === oi
-                                ? 'bg-blue-500/20 border-blue-500/50 text-blue-200'
+                                ? 'bg-violet-500/20 border-violet-500/50 text-violet-200'
                                 : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                             }`}>{opt}</button>
                         ))}
@@ -574,7 +581,7 @@ export default function PracticePaperPage() {
                       <textarea value={saAnswers[q.id] || ''}
                         onChange={(e) => setSaAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
                         placeholder="Type your answer here (2-5 sentences)..." rows={4}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30 resize-none" />
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white placeholder-slate-500 focus:border-violet-500/50 focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none" />
                     )}
                   </div>
                 ))}
@@ -601,16 +608,19 @@ export default function PracticePaperPage() {
     const grade = scores.pct >= 85 ? 'A' : scores.pct >= 75 ? 'A-' : scores.pct >= 70 ? 'B+' : scores.pct >= 65 ? 'B' : scores.pct >= 60 ? 'B-' : scores.pct >= 55 ? 'C+' : scores.pct >= 50 ? 'C' : 'F';
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
-        <div className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
-          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="relative min-h-screen overflow-hidden bg-[#05030a] text-white">
+        <div className="pointer-events-none fixed inset-0 -z-30 bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_6%,rgba(143,84,255,0.2),transparent_16%),radial-gradient(circle_at_16%_24%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_84%_20%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_50%_48%,rgba(126,63,242,0.16),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(79,25,150,0.16),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(39,10,74,0.3),transparent_32%)]" />
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_50%_44%,rgba(170,110,255,0.08),transparent_14%),radial-gradient(circle_at_50%_72%,rgba(112,44,214,0.1),transparent_22%)]" />
+        <div className="sticky top-0 z-50 px-3 pt-4">
+          <div className="mx-auto flex max-w-5xl items-center justify-between rounded-full border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-5 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_18px_60px_rgba(12,4,25,0.28)] backdrop-blur-2xl md:px-8">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-extrabold text-white">NTU<span className="text-blue-400">learn</span></h1>
+              <h1 className="text-xl font-extrabold text-white">NTU<span className="text-violet-300">learn</span></h1>
               <span className="text-slate-500">|</span>
               <span className="text-sm text-slate-300">{COURSE.code} Paper Results</span>
             </div>
             <button onClick={() => { setPhase('setup'); setPaper(null); }}
-              className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold px-5 py-2 rounded-xl transition-all">
+              className="bg-violet-500 hover:bg-violet-600 text-white text-sm font-bold px-5 py-2 rounded-xl transition-all">
               📝 Generate New Paper
             </button>
           </div>
@@ -630,7 +640,7 @@ export default function PracticePaperPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">MCQ Score</p>
-                <p className="text-3xl font-extrabold text-blue-300">{scores.mcqScore}/{scores.mcqTotal}</p>
+                <p className="text-3xl font-extrabold text-violet-300">{scores.mcqScore}/{scores.mcqTotal}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Short Answer</p>
@@ -719,17 +729,17 @@ export default function PracticePaperPage() {
                         )}
 
                         <button onClick={() => setShowExplanations(prev => ({ ...prev, [q.id]: !prev[q.id] }))}
-                          className="mt-3 text-xs text-blue-400 hover:text-blue-300 transition-all">
+                          className="mt-3 text-xs text-violet-400 hover:text-violet-300 transition-all">
                           {showExplanations[q.id] ? '▲ Hide explanation' : '▼ Show explanation'}
                         </button>
 
                         {showExplanations[q.id] && (
-                          <div className="mt-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                            {isMcq && <p className="text-sm text-blue-200">{mcq.explanation}</p>}
+                          <div className="mt-3 p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                            {isMcq && <p className="text-sm text-violet-200">{mcq.explanation}</p>}
                             {!isMcq && (
                               <div>
-                                <p className="text-xs font-bold text-blue-400 mb-1">Model Answer:</p>
-                                <p className="text-sm text-blue-200">{sa.modelAnswer}</p>
+                                <p className="text-xs font-bold text-violet-400 mb-1">Model Answer:</p>
+                                <p className="text-sm text-violet-200">{sa.modelAnswer}</p>
                                 <p className="text-xs text-slate-400 mt-2">Key concepts: {sa.keywords.join(', ')}</p>
                               </div>
                             )}
@@ -756,3 +766,5 @@ export default function PracticePaperPage() {
 
   return null;
 }
+
+
