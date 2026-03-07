@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { logger } from '@/lib/logger';
-import { complete as openAIComplete } from '@/lib/openai-ai';
+
 import { retrieveRelevantChunks } from '@/lib/rag';
 import { verifyAuth } from '@/lib/api-auth';
 
 const log = logger.child('API:AITutor');
 
 function getOpenAI(): OpenAI {
-  const key = process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_2;
+  const key = process.env.OPENAI_API_KEY_TUTOR || process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OpenAI is not configured');
-  return new OpenAI({ apiKey: key });
+  return new OpenAI({ apiKey: key, maxRetries: 2, timeout: 30_000 });
 }
 
 function analyzePerformance(history: number[]): { prediction: number | null; status: string } {
@@ -65,7 +65,15 @@ async function getStudentData(studentId = 'student_1'): Promise<Record<string, a
 
 async function callTutorAI(prompt: string): Promise<string | null> {
   try {
-    return await openAIComplete(prompt);
+    const openai = getOpenAI();
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1500,
+      temperature: 0.7,
+    });
+    return completion.choices[0]?.message?.content?.trim() ?? null;
   } catch (err: unknown) {
     log.error('OpenAI exception', { error: err instanceof Error ? err.message : String(err) });
     return null;
@@ -301,11 +309,7 @@ PERSONALITY:
       });
     }
 
-    // Fallback
-    const weakList = (lc.weakTopics || []).slice(0, 3).join(', ') || 'some topics';
-    return NextResponse.json({
-      answer: `Tutor is resting 😴 AI is unavailable right now. Your weakest topics are ${weakList}. Focus on those first!`,
-    });
+    return NextResponse.json({ error: 'AI is currently unavailable. Please try again in a moment.' }, { status: 503 });
 
   } catch (error: any) {
     log.error('Tutor crashed', { error: error.message });

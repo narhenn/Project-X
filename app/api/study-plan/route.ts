@@ -6,6 +6,9 @@ import { requireFields } from '@/lib/validate';
 
 const log = logger.child('StudyPlan');
 
+const planCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 30 * 60 * 1000; // 30 min — study plan is stable within a session
+
 async function callAI(prompt: string): Promise<string | null> {
   try {
     return await complete(prompt, { maxTokens: 2000 });
@@ -23,6 +26,12 @@ export async function POST(request: Request) {
     const err = requireFields(body, { weakTopics: 'array', quizHistory: 'array' });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
     const { weakTopics, strongTopics, quizHistory, avgSessionMinutes, learningStyle } = body;
+    const cacheKey = `${authResult.uid}:${weakTopics.join(',')}:${quizHistory.length}`;
+    const cached = planCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      log.info('Study plan cache hit');
+      return NextResponse.json(cached.data);
+    }
     log.info('Generating study plan', { weakCount: weakTopics.length, style: learningStyle });
 
     const topicScores: Record<string, number[]> = {};
@@ -91,7 +100,9 @@ Respond ONLY with valid JSON (no backticks):
       };
     }
 
-    return NextResponse.json({ ...result, generatedAt: new Date().toISOString(), topicPriority: prioritized.slice(0, 5) });
+    const response = { ...result, generatedAt: new Date().toISOString(), topicPriority: prioritized.slice(0, 5) };
+    planCache.set(cacheKey, { data: response, ts: Date.now() });
+    return NextResponse.json(response);
   } catch (error: any) {
     log.error('Study plan error', { error: error.message });
     return NextResponse.json({ error: error.message }, { status: 500 });

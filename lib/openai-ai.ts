@@ -32,10 +32,10 @@ async function callOpenAI(prompt: string, options?: { maxTokens?: number; system
   }
   messages.push({ role: 'user', content: prompt });
 
-  for (let attempt = 0; attempt < keys.length * 2; attempt++) {
+  for (let attempt = 0; attempt < keys.length; attempt++) {
     const apiKey = keys[attempt % keys.length];
     try {
-      const openai = new OpenAI({ apiKey });
+      const openai = new OpenAI({ apiKey, maxRetries: 2, timeout: 30_000 });
       log.debug('Calling OpenAI', { attempt: attempt + 1, model: DEFAULT_MODEL, maxTokens });
       const completion = await openai.chat.completions.create({
         model: DEFAULT_MODEL,
@@ -47,9 +47,8 @@ async function callOpenAI(prompt: string, options?: { maxTokens?: number; system
       if (text) return text;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('rate limit') || (err as { status?: number })?.status === 429) {
-        log.info('Rate limited, retrying with next key', { attempt: attempt + 1 });
-        await new Promise((r) => setTimeout(r, 2500));
+      if (msg.includes('rate limit') || msg.includes('Rate limit') || (err as { status?: number })?.status === 429) {
+        log.info('Rate limited, trying next key', { attempt: attempt + 1 });
         continue;
       }
       log.warn('OpenAI API error', { error: msg });

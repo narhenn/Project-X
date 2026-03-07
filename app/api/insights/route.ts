@@ -5,6 +5,10 @@ import { requireFields } from '@/lib/validate';
 
 const log = logger.child('InsightsEngine');
 
+// Server-side cache: keyed by uid+quizCount, 5 min TTL
+const insightsCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+
 class LearningStateAnalyzer {
   private d: any;
   constructor(data: any) { this.d = data; }
@@ -133,7 +137,7 @@ class LearningStateAnalyzer {
 
 async function callAI(prompt: string): Promise<string | null> {
   try {
-    return await import('@/lib/openai-ai').then((m) => m.complete(prompt, { maxTokens: 3000 }));
+    return await import('@/lib/openai-ai').then((m) => m.complete(prompt, { maxTokens: 500 }));
   } catch (e: unknown) {
     log.error('OpenAI fetch error', { error: e instanceof Error ? e.message : String(e) });
     return null;
@@ -149,6 +153,15 @@ export async function POST(request: Request) {
     const studentData = await request.json();
     const err = requireFields(studentData, {});
     if (err) return NextResponse.json({ error: err }, { status: 400 });
+
+    // Check server-side cache
+    const cacheKey = `${authResult.uid}:${(studentData.quizHistory || []).length}:${studentData.weeksActive}`;
+    const cached = insightsCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      log.info('Insights cache hit', { key: cacheKey });
+      return NextResponse.json(cached.data);
+    }
+
     log.info('Full insights analysis started', { student: studentData.name });
 
     const analyzer = new LearningStateAnalyzer(studentData);
@@ -166,48 +179,13 @@ export async function POST(request: Request) {
     // Try AI — but use fallback if it fails
     let aiData: any = null;
 
-    const prompt = `You are an elite AI learning analytics engine at NTU Singapore. Provide deep, data-backed insights.
+    const prompt = `NTU learning analytics. Student: ${studentData.name}, ${studentData.weeksActive}wk, ${phase} phase.
+Weak: ${studentData.weakTopics.join(', ')} | Strong: ${studentData.strongTopics.join(', ')}
+Mastery: ${topicMastery.slice(0, 5).map(t => t.topic + ':' + t.avgScore + '%').join(', ')}
+Velocity: ${learningVelocity.velocity}pts/quiz ${learningVelocity.trend}
 
-STUDENT: ${studentData.name}, Style: ${studentData.learningStyle}, Active ${studentData.weeksActive} weeks
-PHASE: ${phase} (${(confidence * 100).toFixed(0)}% confidence), Signals: ${signals.join('; ')}
-MODULES: ${studentData.modules.map((m: any) => m.name + ' ' + m.progress + '%').join(', ')}
-QUIZ HISTORY: ${studentData.quizHistory.map((q: any) => q.topic + ':' + q.score + '%(W' + q.week + ')').join(', ')}
-HOURS (W1-W${studentData.weeksActive}): ${studentData.weeklyHoursHistory.join(', ')}
-TOPIC MASTERY: ${topicMastery.map(t => t.topic + ':' + t.avgScore + '% ' + t.mastery).join(', ')}
-FORGETTING: ${forgettingCurve.map(f => f.topic + ':' + f.estimatedRetention + '% retention').join(', ')}
-VELOCITY: ${learningVelocity.velocity} pts/quiz, ${learningVelocity.trend}, efficiency ${learningVelocity.efficiency} pts/hr
-COGNITIVE LOAD: ${cognitiveLoad.map(c => c.week + ':' + c.cognitiveLoad + '% ' + c.level).join(', ')}
-OPTIMAL TIMES: ${optimalStudyTime.filter(t => t.avgScore).map(t => t.label + ':' + t.avgScore + '%').join(', ')}
-WEAK: ${studentData.weakTopics.join(', ')} | STRONG: ${studentData.strongTopics.join(', ')}
-
-Respond ONLY with valid JSON (no backticks):
-{
-  "phaseDescription": "2 sentences about ${phase} phase for this student",
-  "predictedTrajectory": "2 sentences prediction for next 2 weeks",
-  "nudges": [
-    {"type":"topic-reminder","priority":"high","title":"5 words","message":"2-3 sentences with data","action":"specific action","reasoning":"data that triggered this"},
-    {"type":"study-pattern","priority":"medium","title":"5 words","message":"2-3 sentences","action":"action","reasoning":"data reason"},
-    {"type":"streak-motivation","priority":"low","title":"5 words","message":"2-3 sentences","action":"action","reasoning":"data reason"}
-  ],
-  "explainableInsights": [
-    {"insight":"finding","evidence":"numbers","confidence":0.85,"impact":"effect","recommendation":"action"},
-    {"insight":"finding","evidence":"numbers","confidence":0.78,"impact":"effect","recommendation":"action"},
-    {"insight":"finding","evidence":"numbers","confidence":0.72,"impact":"effect","recommendation":"action"},
-    {"insight":"finding","evidence":"numbers","confidence":0.68,"impact":"effect","recommendation":"action"}
-  ],
-  "weeklyEvolution": {"strengthsGained":["topics"],"areasToWatch":["topics"],"effortTrend":"increasing","engagementTrend":"increasing"},
-  "adaptiveRecommendations": [
-    {"category":"content","recommendation":"specific","reason":"data reason","expectedImpact":"measurable"},
-    {"category":"schedule","recommendation":"specific","reason":"data reason","expectedImpact":"measurable"},
-    {"category":"difficulty","recommendation":"specific","reason":"data reason","expectedImpact":"measurable"}
-  ],
-  "timelineNarrative": "4 sentence journey narrative",
-  "weeklyReport": {"summary":"3-4 sentences","highlights":["positive 1","positive 2","positive 3"],"concerns":["concern 1","concern 2"],"goalForNextWeek":"specific goal","motivationalNote":"encouraging sentence"},
-  "forgettingCurveAdvice": "2-3 sentences about retention",
-  "cognitiveLoadAdvice": "2-3 sentences about load balance",
-  "optimalTimeAdvice": "2-3 sentences about best study times",
-  "velocityAdvice": "2-3 sentences about learning speed"
-}`;
+Reply ONLY valid JSON, no backticks:
+{"phaseDescription":"1 sentence about ${phase}","predictedTrajectory":"1 sentence prediction","timelineNarrative":"2 sentence journey","weeklyReport":{"summary":"2 sentences","highlights":["1","2"],"concerns":["1"],"goalForNextWeek":"goal","motivationalNote":"1 sentence"}}`;
 
     const aiResponse = await callAI(prompt);
 
@@ -288,6 +266,7 @@ Respond ONLY with valid JSON (no backticks):
     };
 
     log.info('Analysis complete', { timeMs: merged.meta.analysisTimeMs, aiAvailable: merged.meta.aiAvailable });
+    insightsCache.set(cacheKey, { data: merged, ts: Date.now() });
     return NextResponse.json(merged);
   } catch (error: any) {
     log.error('Fatal insights error', { error: error.message });

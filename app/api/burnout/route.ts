@@ -6,6 +6,9 @@ import { requireFields } from '@/lib/validate';
 
 const log = logger.child('BurnoutAPI');
 
+const burnoutCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 min — burnout data doesn't change fast
+
 export async function POST(request: Request) {
   const authResult = await verifyAuth(request);
   if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -14,6 +17,12 @@ export async function POST(request: Request) {
     const studyData = await request.json();
     const err = requireFields(studyData, { totalHoursThisWeek: 'number' });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
+    const cacheKey = `${authResult.uid}:${studyData.totalHoursThisWeek}:${studyData.streakDays}`;
+    const cached = burnoutCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      log.info('Burnout cache hit');
+      return NextResponse.json(cached.data);
+    }
     log.info('Burnout analysis requested', { hours: studyData.totalHoursThisWeek });
 
     const signals = [];
@@ -119,16 +128,9 @@ Respond ONLY with valid JSON, no markdown backticks:
       { name: 'Campus Care Network', contact: 'campuscare@ntu.edu.sg', type: 'Peer Support', url: '' },
     ];
 
-    return NextResponse.json({
-      riskLevel,
-      riskScore: Math.min(100, riskScore),
-      signals,
-      breakdown,
-      recommendation,
-      schedule,
-      weeklyTip,
-      mentalHealthResources,
-    });
+    const result = { riskLevel, riskScore: Math.min(100, riskScore), signals, breakdown, recommendation, schedule, weeklyTip, mentalHealthResources };
+    burnoutCache.set(cacheKey, { data: result, ts: Date.now() });
+    return NextResponse.json(result);
   } catch (error) {
     log.error('Burnout API error', { error: error.message });
     return NextResponse.json({ riskLevel: 'low', riskScore: 0, signals: [], breakdown: [], recommendation: 'Unable to analyze. Please try again.', schedule: null, weeklyTip: '', mentalHealthResources: [] }, { status: 500 });

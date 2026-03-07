@@ -453,12 +453,29 @@ export default function InsightsPage() {
   };
 
   const didFetch = useRef(false);
-  const fetch_ = async () => { setLoading(true); try { const r = await authFetch('/api/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(filteredStudentData) }); setIns(await r.json()); } catch (e) { console.error(e); } setLoading(false); };
+  const insightsCache = useRef<Record<string, { data: any; ts: number }>>({});
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  const fetch_ = async () => {
+    const cacheKey = selectedModule || 'ALL';
+    const cached = insightsCache.current[cacheKey];
+    if (cached && Date.now() - cached.ts < CACHE_TTL) { setIns(cached.data); return; }
+    setLoading(true);
+    try {
+      const r = await authFetch('/api/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(filteredStudentData) });
+      const data = await r.json();
+      insightsCache.current[cacheKey] = { data, ts: Date.now() };
+      setIns(data);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
   useEffect(() => { if (!dataLoading && !didFetch.current) { didFetch.current = true; fetch_(); } }, [dataLoading]);
 
   // Re-fetch when module changes (skip initial load handled above)
   useEffect(() => {
     if (dataLoading || !didFetch.current) return;
+    const cacheKey = selectedModule || 'ALL';
+    const cached = insightsCache.current[cacheKey];
+    if (cached && Date.now() - cached.ts < CACHE_TTL) { setIns(cached.data); return; }
     setIns(null); setWeaknessData(null); weaknessFetched.current = false;
     fetch_();
   }, [selectedModule]);

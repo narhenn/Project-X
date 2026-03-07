@@ -15,11 +15,11 @@ export async function retrieveRelevantChunks(
     const supabase = await getSupabase();
     if (!supabase) return [];
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY_TUTOR || process.env.OPENAI_API_KEY;
     if (!apiKey) return [];
 
     const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ apiKey, maxRetries: 2, timeout: 30_000 });
 
     const res = await openai.embeddings.create({
       model: 'text-embedding-ada-002',

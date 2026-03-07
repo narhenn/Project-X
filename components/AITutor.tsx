@@ -153,12 +153,13 @@ export default function AITutor() {
       });
 
       const apiData = await res.json();
-      const aiText = apiData.answer || 'Sorry, couldn\'t process that. Try again!';
-      const ragSources = apiData.ragSources;
-
-      setMessages(prev => [...prev, { role: 'ai', text: aiText, ragSources }]);
+      if (apiData.error) {
+        setMessages(prev => [...prev, { role: 'ai', text: `⚠️ ${apiData.error}` }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'ai', text: apiData.answer, ragSources: apiData.ragSources }]);
+      }
     } catch {
-      setMessages(prev => [...prev, { role: 'ai', text: 'Connection issue — please try again.' }]);
+      setMessages(prev => [...prev, { role: 'ai', text: '⚠️ Connection issue — please try again.' }]);
     }
     setLoading(false);
   }, [input, loading, attachedImage, messages, studentData]);

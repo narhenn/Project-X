@@ -6,6 +6,9 @@ import { requireFields } from '@/lib/validate';
 
 const log = logger.child('WeaknessAnalysis');
 
+const weaknessCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 10 * 60 * 1000;
+
 async function callAI(prompt: string): Promise<string | null> {
   try {
     return await complete(prompt);
@@ -206,6 +209,12 @@ export async function POST(request: Request) {
     const err = requireFields(body, { quizHistory: 'array' });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
     const { quizHistory } = body;
+    const cacheKey = `${authResult.uid}:${quizHistory.length}:${quizHistory.map((q: any) => q.score).join(',')}`;
+    const cached = weaknessCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      log.info('Weakness cache hit');
+      return NextResponse.json(cached.data);
+    }
     log.info('Weakness analysis started', { quizCount: quizHistory.length });
 
     const analyzer = new WeaknessAnalyzer(quizHistory);
@@ -277,6 +286,7 @@ Respond ONLY with valid JSON (no backticks):
     };
 
     log.info('Weakness analysis complete', { ...result.summary, timeMs: result.meta.analysisTimeMs });
+    weaknessCache.set(cacheKey, { data: result, ts: Date.now() });
     return NextResponse.json(result);
   } catch (error: any) {
     log.error('Weakness analysis error', { error: error.message });
