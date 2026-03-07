@@ -39,28 +39,28 @@ export default function ActivityPage() {
     : FALLBACK_ACTIVITIES;
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'linear-gradient(165deg, #f8fafc 0%, #f1f5f9 35%, #e2e8f0 100%)' }}>
+    <div className="min-h-screen flex bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)] text-white">
       <AppSidebar currentPath="/activity" onSignOut={handleSignOut} />
       <main className="flex-1 overflow-auto">
         <div className="max-w-2xl mx-auto px-6 py-8">
-          <p className="font-medium text-indigo-600 text-sm uppercase tracking-widest mb-1">Activity</p>
-          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl font-bold tracking-tight text-slate-900 mb-2">
+          <p className="font-medium text-violet-300 text-sm uppercase tracking-widest mb-1">Activity</p>
+          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl font-bold tracking-tight text-white mb-2">
             Recent activity
           </h1>
-          <p className="text-slate-500 text-sm mb-8">Your engagement across courses and communities</p>
+          <p className="text-white/60 text-sm mb-8">Your engagement across courses and communities</p>
           {loading ? (
-            <div className="text-center py-12 text-slate-400">Loading activity...</div>
+            <div className="text-center py-12 text-white/50">Loading activity...</div>
           ) : (
             <ul className="space-y-2">
               {activities.map((a: any) => (
                 <li
                   key={a.id}
-                  className="flex items-start gap-4 p-4 rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm"
+                  className="flex items-start gap-4 p-4 rounded-2xl border border-white/12 bg-white/[0.06] shadow-sm"
                 >
                   <span className="text-xl">{a.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900">{a.text}</p>
-                    <p className="text-sm text-slate-500 mt-0.5">{a.time}</p>
+                    <p className="font-medium text-white">{a.text}</p>
+                    <p className="text-sm text-white/60 mt-0.5">{a.time}</p>
                   </div>
                 </li>
               ))}
@@ -71,3 +71,4 @@ export default function ActivityPage() {
     </div>
   );
 }
+

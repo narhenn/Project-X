@@ -399,7 +399,10 @@ function WatchPageContent() {
   };
 
   return (
-    <div className="min-h-screen w-full text-white" style={{ background: 'linear-gradient(180deg, var(--watch-bg) 0%, #1e293b 50%, var(--watch-bg) 100%)' }}>
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#05030a] text-white">
+      <div className="pointer-events-none fixed inset-0 -z-30 bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_8%,rgba(143,84,255,0.2),transparent_16%),radial-gradient(circle_at_16%_24%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_84%_20%,rgba(88,31,170,0.16),transparent_24%),radial-gradient(circle_at_50%_48%,rgba(126,63,242,0.16),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(79,25,150,0.16),transparent_28%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_50%_44%,rgba(170,110,255,0.08),transparent_14%),radial-gradient(circle_at_50%_72%,rgba(112,44,214,0.1),transparent_22%)]" />
       {/* Back to courses - top left corner */}
       <Link
         href="/course"
@@ -414,7 +417,7 @@ function WatchPageContent() {
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
         {/* Header */}
         <header className="mb-8">
-          <p className="font-medium text-indigo-300/90 text-sm uppercase tracking-widest mb-1">Content Engine</p>
+          <p className="mb-1 text-sm font-medium uppercase tracking-widest text-violet-300/90">Content Engine</p>
           <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-2xl md:text-3xl font-bold tracking-tight text-white">
             {pageTopic}
           </h1>
@@ -446,7 +449,7 @@ function WatchPageContent() {
                     ${passed
                       ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30 hover:bg-emerald-500/30 hover:ring-emerald-400/50'
                       : canOpen
-                        ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/40 hover:bg-indigo-500/30 hover:ring-indigo-400/60 hover:shadow-[0_0_20px_var(--watch-glow)]'
+                        ? 'bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/40 hover:bg-violet-500/30 hover:ring-violet-400/60 hover:shadow-[0_0_20px_var(--watch-glow)]'
                         : 'bg-slate-700/50 text-slate-500 cursor-not-allowed ring-1 ring-slate-600/50'}
                   `}
                 >
@@ -566,7 +569,7 @@ function WatchPageContent() {
               You&apos;ve attempted this segment quiz 3 times. That&apos;s completely okay — some topics need a different perspective.
             </p>
             <p className="text-slate-400 text-sm mb-6">
-              We recommend visiting <span className="text-blue-400 font-semibold">NTU Peer Tutoring</span> where fellow students can walk you through these concepts one-on-one.
+              We recommend visiting <span className="text-violet-300 font-semibold">NTU Peer Tutoring</span> where fellow students can walk you through these concepts one-on-one.
             </p>
             <div className="space-y-3">
               <button
@@ -591,3 +594,4 @@ export default function WatchPage() {
     </Suspense>
   );
 }
+

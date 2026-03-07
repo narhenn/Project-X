@@ -87,24 +87,24 @@ export default function CalendarPage() {
   const peakTime = optimalStudyTime.find((t: any) => t.performance === 'peak');
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'linear-gradient(165deg, #f8fafc 0%, #f1f5f9 35%, #e2e8f0 100%)' }}>
+    <div className="min-h-screen flex bg-[linear-gradient(180deg,#05030a_0%,#0a0414_18%,#120722_38%,#090411_60%,#040208_100%)] text-white">
       <AppSidebar currentPath="/calendar" onSignOut={handleSignOut} />
       <main className="flex-1 overflow-auto">
         <div className="max-w-2xl mx-auto px-6 py-8">
-          <p className="font-medium text-indigo-600 text-sm uppercase tracking-widest mb-1">Calendar</p>
-          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl font-bold tracking-tight text-slate-900 mb-2">
+          <p className="font-medium text-violet-300 text-sm uppercase tracking-widest mb-1">Calendar</p>
+          <h1 className="font-['Plus_Jakarta_Sans',sans-serif] text-3xl font-bold tracking-tight text-white mb-2">
             Smart Schedule
           </h1>
-          <p className="text-slate-500 text-sm mb-6">AI-powered review schedule based on your memory retention + spaced repetition</p>
+          <p className="text-white/60 text-sm mb-6">AI-powered review schedule based on your memory retention + spaced repetition</p>
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
             <button onClick={() => setActiveTab('reviews')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'reviews' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white/80 text-slate-600 hover:bg-white'}`}>
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'reviews' ? 'bg-violet-500/80 text-white shadow-md' : 'bg-white/[0.06] text-white/70 hover:bg-white/[0.1]'}`}>
               🧠 Smart Review ({reviewSchedule.length})
             </button>
             <button onClick={() => setActiveTab('events')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'events' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white/80 text-slate-600 hover:bg-white'}`}>
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'events' ? 'bg-violet-500/80 text-white shadow-md' : 'bg-white/[0.06] text-white/70 hover:bg-white/[0.1]'}`}>
               📅 Events ({EVENTS.length})
             </button>
           </div>
@@ -113,8 +113,8 @@ export default function CalendarPage() {
             <>
               {/* AI recommendation banner */}
               {peakTime && (
-                <div className="mb-4 p-3 rounded-xl bg-indigo-50 border border-indigo-100">
-                  <p className="text-sm text-indigo-700">
+                <div className="mb-4 rounded-xl border border-violet-300/25 bg-violet-500/10 p-3">
+                  <p className="text-sm text-violet-200">
                     <span className="font-semibold">AI Recommendation:</span> Schedule reviews during <span className="font-bold">{peakTime.label}</span> — your scores average {peakTime.avgScore}% during this window.
                   </p>
                 </div>
@@ -123,27 +123,27 @@ export default function CalendarPage() {
               {reviewSchedule.length > 0 ? (
                 <ul className="space-y-3">
                   {reviewSchedule.map((r) => {
-                    const urgencyColor = r.urgency === 'critical' ? 'border-l-red-500 bg-red-50/50' :
-                      r.urgency === 'review-soon' ? 'border-l-amber-500 bg-amber-50/50' :
-                      'border-l-blue-500 bg-blue-50/50';
+                    const urgencyColor = r.urgency === 'critical' ? 'border-l-red-500 bg-red-500/10' :
+                      r.urgency === 'review-soon' ? 'border-l-amber-500 bg-amber-500/10' :
+                      'border-l-blue-500 bg-blue-500/10';
                     return (
                       <li key={r.id}
-                        className={`flex items-center gap-4 p-4 rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm border-l-4 ${urgencyColor}`}>
+                        className={`flex items-center gap-4 p-4 rounded-2xl border border-white/12 bg-white/[0.06] shadow-sm border-l-4 ${urgencyColor}`}>
                         <div className="w-14 shrink-0 text-center">
-                          <div className="text-xs font-semibold text-slate-500 uppercase">{r.date.split(' ')[0]}</div>
-                          <div className="text-lg font-bold text-slate-900">{r.date.split(' ')[1]}</div>
+                          <div className="text-xs font-semibold text-white/60 uppercase">{r.date.split(' ')[0]}</div>
+                          <div className="text-lg font-bold text-white">{r.date.split(' ')[1]}</div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-900">Review: {r.topic}</p>
-                          <p className="text-sm text-slate-500">{r.time} · Retention: {r.retention}% · Interval: {r.interval}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Last studied {r.daysSinceStudied}d ago · Original score: {r.originalScore}%</p>
+                          <p className="font-semibold text-white">Review: {r.topic}</p>
+                          <p className="text-sm text-white/60">{r.time} · Retention: {r.retention}% · Interval: {r.interval}</p>
+                          <p className="text-xs text-white/50 mt-0.5">Last studied {r.daysSinceStudied}d ago · Original score: {r.originalScore}%</p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <span className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium ${typeStyles[r.type] || 'bg-slate-100 text-slate-700'}`}>
+                          <span className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium ${typeStyles[r.type] || 'bg-white/[0.08] text-white/85'}`}>
                             {r.type === 'review' ? 'urgent review' : 'spaced rep'}
                           </span>
                           <button onClick={() => router.push('/watch')}
-                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                            className="text-xs font-medium text-violet-300 hover:text-violet-200">
                             Start Review
                           </button>
                         </div>
@@ -152,9 +152,9 @@ export default function CalendarPage() {
                   })}
                 </ul>
               ) : (
-                <div className="text-center py-12 bg-white/90 rounded-2xl border border-slate-200/80">
+                <div className="text-center py-12 bg-white/[0.06] rounded-2xl border border-white/12">
                   <p className="text-lg font-bold text-green-600 mb-2">All caught up!</p>
-                  <p className="text-sm text-slate-500">No topics need review right now. Your retention is strong.</p>
+                  <p className="text-sm text-white/60">No topics need review right now. Your retention is strong.</p>
                 </div>
               )}
             </>
@@ -164,16 +164,16 @@ export default function CalendarPage() {
             <ul className="space-y-3">
               {EVENTS.map((e) => (
                 <li key={e.id}
-                  className="flex items-center gap-4 p-4 rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm">
+                  className="flex items-center gap-4 p-4 rounded-2xl border border-white/12 bg-white/[0.06] shadow-sm">
                   <div className="w-14 shrink-0 text-center">
-                    <div className="text-xs font-semibold text-slate-500 uppercase">{e.date.split(' ')[0]}</div>
-                    <div className="text-lg font-bold text-slate-900">{e.date.split(' ')[1]}</div>
+                    <div className="text-xs font-semibold text-white/60 uppercase">{e.date.split(' ')[0]}</div>
+                    <div className="text-lg font-bold text-white">{e.date.split(' ')[1]}</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900">{e.title}</p>
-                    <p className="text-sm text-slate-500">{e.time} · {e.location}</p>
+                    <p className="font-semibold text-white">{e.title}</p>
+                    <p className="text-sm text-white/60">{e.time} · {e.location}</p>
                   </div>
-                  <span className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium ${typeStyles[e.type] || 'bg-slate-100 text-slate-700'}`}>
+                  <span className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium ${typeStyles[e.type] || 'bg-slate-100 text-white/85'}`}>
                     {e.type}
                   </span>
                 </li>
@@ -185,3 +185,4 @@ export default function CalendarPage() {
     </div>
   );
 }
+
